@@ -28,8 +28,10 @@ public static class Beacon
                 }
                 catch (Exception) { /* interface went away; try again next round */ }
             }
-            // Faster while pairing is open, so a phone entering a code finds the PC quickly.
-            try { await Task.Delay(TimeSpan.FromSeconds(App.Session?.PairingOpen == true ? 1 : 3), ct); } catch (TaskCanceledException) { break; }
+            // Every 1 s while pairing is open (a phone entering a code finds the PC quickly), every 3 s
+            // while no phone is connected, and only every 15 s once one is (nobody needs it then).
+            var every = App.Session?.PairingOpen == true ? 1 : App.Session?.IsConnected == true ? 15 : 3;
+            try { await Task.Delay(TimeSpan.FromSeconds(every), ct); } catch (TaskCanceledException) { break; }
         }
     }
 

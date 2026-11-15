@@ -45,8 +45,36 @@ class NotificationBridge : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         if (!shouldMirror(sbn)) return
+        if (!LinkHub.isConnected) return // no PC: don't build anything (it's all sent again on connect)
+        // Apps repost the same notification a lot, and progress ones many times a second:
+        // skip exact repeats, and send at most one update per notification every 1.5 s.
+        val now = android.os.SystemClock.elapsedRealtime()
+        val wait = (lastPostAt[sbn.key] ?: 0L) + 1_500L - now
+        if (wait > 0) {
+            pending[sbn.key] = sbn
+            if (scheduled.add(sbn.key)) main.postDelayed({
+                scheduled.remove(sbn.key)
+                pending.remove(sbn.key)?.let { postNow(it) }
+            }, wait)
+            return
+        }
+        postNow(sbn)
+    }
+
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private val lastPostAt = HashMap<String, Long>()
+    private val lastHash = HashMap<String, Int>()
+    private val pending = HashMap<String, StatusBarNotification>()
+    private val scheduled = HashSet<String>()
+
+    private fun postNow(sbn: StatusBarNotification) {
+        val env = toMessage(sbn)
+        val hash = env.d.filterKeys { it != "time" }.toString().hashCode()
+        if (lastHash[sbn.key] == hash) return
+        lastHash[sbn.key] = hash
+        lastPostAt[sbn.key] = android.os.SystemClock.elapsedRealtime()
         sendIconOnce(sbn.packageName, LinkHub::send)
-        LinkHub.send(toMessage(sbn))
+        LinkHub.send(env)
         // A sign-in code in a new notification goes straight onto the PC's clipboard.
         if (sbn.notification.`when` > System.currentTimeMillis() - 120_000) {
             val e = sbn.notification.extras
@@ -61,6 +89,8 @@ class NotificationBridge : NotificationListenerService() {
     }.getOrDefault(pkg)
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        lastHash.remove(sbn.key); lastPostAt.remove(sbn.key); pending.remove(sbn.key)
+        if (!LinkHub.isConnected) return
         LinkHub.send(msg("notif.removed") { put("key", sbn.key) })
     }
 
@@ -122,6 +152,7 @@ class NotificationBridge : NotificationListenerService() {
     }
 
     private fun sendIconOnce(pkg: String, out: (Envelope) -> Unit, force: Boolean = false) {
+        if (!force && !LinkHub.isConnected) return // don't mark it sent when nobody got it
         if (!iconsSent.add(pkg) && !force) return
         val icon = runCatching { packageManager.getApplicationIcon(pkg) }.getOrNull() ?: return
         val bmp = icon.toBitmap(96, 96, Bitmap.Config.ARGB_8888)

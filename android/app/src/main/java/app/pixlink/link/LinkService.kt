@@ -27,6 +27,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.jsonObject
@@ -56,6 +57,7 @@ class LinkService : LifecycleService() {
         status = StatusReporter(this)
 
         lifecycleScope.launch(Dispatchers.IO) { listenForPcs() }
+        watchNetworkAndScreen()
         app.pixlink.messages.SmsBridge.startWatching(this)
 
         // Automatic updates: check now and every 6 hours while Pixlink is running.
@@ -140,11 +142,19 @@ class LinkService : LifecycleService() {
             LinkHub.setState(pcId, LinkState.Connecting(pc.name))
 
             // Routes to try, in order: Wi-Fi, then Bluetooth when Wi-Fi can't reach the PC.
+            // No Wi-Fi at all? Don't even try it (saves waking the radio for nothing).
             val routes = when (store.connectVia) {
                 "wifi" -> listOf(false)
                 "bluetooth" -> listOf(true)
                 else -> listOf(false, true)
-            }.filter { !it || pc.bt != null }
+            }.filter { !it || pc.bt != null }.filter { it || onWifi }
+            if (routes.isEmpty()) {
+                LinkHub.lastDisconnectReason[pcId] = "Not on Wi-Fi"
+                if (LinkHub.states.value[pcId] !is LinkState.Error) LinkHub.setState(pcId, LinkState.Disconnected)
+                wake.receive() // until Wi-Fi comes back
+                backoffMs = 1_000L
+                continue
+            }
 
             for (bluetooth in routes) {
                 var connected = false
@@ -189,8 +199,10 @@ class LinkService : LifecycleService() {
 
             if (!currentCoroutineContext().isActive) return
             if (LinkHub.states.value[pcId] !is LinkState.Error) LinkHub.setState(pcId, LinkState.Disconnected)
-            withTimeoutOrNull(backoffMs) { wake.receive() }
-            backoffMs = (backoffMs * 2).coerceAtMost(30_000)
+            // Wait before trying again: short at first, then up to 1 minute with the screen on, 10 minutes off.
+            // Wi-Fi reconnecting, the screen turning on or the PC's beacon all cut the wait short.
+            if (withTimeoutOrNull(backoffMs) { wake.receive() } != null) backoffMs = 1_000L
+            else backoffMs = (backoffMs * 2).coerceAtMost(if (screenOn) 60_000L else 600_000L)
         }
     }
 
@@ -277,17 +289,25 @@ class LinkService : LifecycleService() {
      */
     private suspend fun listenForPcs() {
         val wifi = applicationContext.getSystemService(android.net.wifi.WifiManager::class.java)
+        // Hearing broadcasts needs a multicast lock, which stops Wi-Fi from dozing, so it's only held
+        // while a PC is actually missing (and we're on Wi-Fi). Connected = no lock, no listening.
         val lock = wifi.createMulticastLock("pixlink-beacon").apply { setReferenceCounted(false) }
         try {
-            lock.acquire()
             java.net.DatagramSocket(null).use { sock ->
                 beaconSocket = sock
                 sock.reuseAddress = true
                 sock.bind(java.net.InetSocketAddress(BEACON_PORT))
+                sock.soTimeout = 5_000
                 val buf = ByteArray(1024)
                 while (currentCoroutineContext().isActive) {
+                    if (!beaconNeeded()) {
+                        if (lock.isHeld) lock.release()
+                        LinkHub.states.first { beaconNeeded() || !currentCoroutineContext().isActive }
+                        continue
+                    }
+                    if (!lock.isHeld) lock.acquire()
                     val packet = java.net.DatagramPacket(buf, buf.size)
-                    sock.receive(packet)
+                    try { sock.receive(packet) } catch (_: java.net.SocketTimeoutException) { continue }
                     val text = String(packet.data, 0, packet.length, Charsets.UTF_8)
                     val obj = runCatching { Codec.parseToJsonElement(text).jsonObject }.getOrNull() ?: continue
                     val id = obj["pcId"]?.jsonPrimitive?.content ?: continue
@@ -314,7 +334,64 @@ class LinkService : LifecycleService() {
         }
     }
 
+    /**
+     * The beacon is only useful while a paired PC isn't connected over Wi-Fi: to find it at a new
+     * address, or to move from Bluetooth back to Wi-Fi. With the screen off it stops after 10 minutes
+     * of searching (Wi-Fi coming back or the screen turning on starts it again).
+     */
+    private fun beaconNeeded(): Boolean {
+        if (!onWifi || store.pcs.isEmpty()) return false
+        if (!screenOn && System.currentTimeMillis() - searchingSince > 10 * 60_000L) return false
+        val states = LinkHub.states.value
+        val missing = store.pcs.any { pc ->
+            val st = states[pc.id]
+            st !is LinkState.Connected || (st.viaBluetooth && store.connectVia == "auto")
+        }
+        if (!missing) searchingSince = System.currentTimeMillis()
+        return missing
+    }
+
+    @Volatile private var onWifi = true
+    @Volatile private var screenOn = true
+    @Volatile private var searchingSince = System.currentTimeMillis()
+    private var netCallback: android.net.ConnectivityManager.NetworkCallback? = null
+    private val screenReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) {
+            screenOn = i.action != Intent.ACTION_SCREEN_OFF
+            if (screenOn) { searchingSince = System.currentTimeMillis(); wakeAll() }
+            LinkHub.nudge()
+        }
+    }
+
+    private fun wakeAll() = wakes.values.forEach { it.trySend(Unit) }
+
+    /** Reconnect as soon as Wi-Fi is back or the screen turns on, instead of on a timer. */
+    private fun watchNetworkAndScreen() {
+        val cm = getSystemService(android.net.ConnectivityManager::class.java)
+        screenOn = getSystemService(android.os.PowerManager::class.java).isInteractive
+        onWifi = cm.getNetworkCapabilities(cm.activeNetwork)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ?: true
+        val cb = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) {
+                onWifi = true; searchingSince = System.currentTimeMillis(); wakeAll(); LinkHub.nudge()
+            }
+            override fun onLost(network: android.net.Network) {
+                onWifi = cm.getNetworkCapabilities(cm.activeNetwork)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true
+                LinkHub.nudge()
+            }
+        }
+        runCatching {
+            cm.registerNetworkCallback(
+                android.net.NetworkRequest.Builder().addTransportType(android.net.NetworkCapabilities.TRANSPORT_WIFI).build(), cb)
+            netCallback = cb
+        }
+        registerReceiver(screenReceiver, android.content.IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF)
+        })
+    }
+
     override fun onDestroy() {
+        runCatching { unregisterReceiver(screenReceiver) }
+        netCallback?.let { cb -> runCatching { getSystemService(android.net.ConnectivityManager::class.java).unregisterNetworkCallback(cb) } }
         app.pixlink.messages.SmsBridge.stopWatching(this)
         runCatching { beaconSocket?.close() } // unblocks the beacon listener
         loops.values.forEach { it.cancel() }

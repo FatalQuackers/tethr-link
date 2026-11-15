@@ -14,19 +14,29 @@ import kotlinx.serialization.json.put
 class StatusReporter(private val context: Context) {
     private var registered = false
 
+    // Android sends battery updates every few seconds (temperature, voltage…); only real changes go to the PC.
+    private var last: Triple<Int, Boolean, Boolean>? = null
+
     private val receiver = object : BroadcastReceiver() {
-        override fun onReceive(c: Context, intent: Intent) = send(intent)
+        override fun onReceive(c: Context, intent: Intent) {
+            if (intent.action == Intent.ACTION_BATTERY_CHANGED) send(intent)
+            else resend(force = false)
+        }
     }
 
     fun start() {
         if (registered) return
-        val sticky = context.registerReceiver(receiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        val sticky = context.registerReceiver(receiver, IntentFilter().apply {
+            addAction(Intent.ACTION_BATTERY_CHANGED)
+            addAction(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED)
+        })
         registered = true
         sticky?.let(::send)
     }
 
     /** Sends the current battery state again (e.g. to a PC that just connected). */
-    fun resend() {
+    fun resend(force: Boolean = true) {
+        if (force) last = null
         context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))?.let(::send)
     }
 
@@ -41,10 +51,14 @@ class StatusReporter(private val context: Context) {
         val scale = battery.getIntExtra(BatteryManager.EXTRA_SCALE, 100)
         val plugged = battery.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
         val nm = context.getSystemService(NotificationManager::class.java)
+        val now = Triple(if (level >= 0) level * 100 / scale else -1, plugged,
+            nm.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL)
+        if (now == last) return
+        last = now
         LinkHub.send(msg("status") {
-            put("battery", if (level >= 0) level * 100 / scale else -1)
-            put("charging", plugged)
-            put("dnd", nm.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL)
+            put("battery", now.first)
+            put("charging", now.second)
+            put("dnd", now.third)
         })
     }
 }

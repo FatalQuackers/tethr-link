@@ -385,7 +385,9 @@ public partial class PhoneSession : ObservableObject
     private void StartPing()
     {
         _pingTimer?.Dispose();
-        _pingTimer = new PeriodicTimer(TimeSpan.FromSeconds(15));
+        // Every ping wakes the phone's Wi-Fi, so keep them rare: 35 s still beats the 45 s
+        // silence limit of older phone versions (new ones wait 2 minutes).
+        _pingTimer = new PeriodicTimer(TimeSpan.FromSeconds(35));
         var timer = _pingTimer;
         _ = Task.Run(async () =>
         {

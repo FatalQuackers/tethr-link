@@ -42,6 +42,9 @@ object LinkHub {
     internal fun client(pcId: String): LinkClient? = clients[pcId]
 
     val isConnected get() = _states.value.values.any { it is LinkState.Connected }
+
+    /** Re-checks anything waiting on the connection states (e.g. Wi-Fi or the screen changed). */
+    fun nudge() { _states.value = HashMap(_states.value) }
     val connectedPcIds: List<String> get() = _states.value.filterValues { it is LinkState.Connected }.keys.toList()
 
     /** Sends to every connected PC (notifications, battery, media…). */

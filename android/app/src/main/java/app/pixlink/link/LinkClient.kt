@@ -101,7 +101,7 @@ class LinkClient(
     companion object {
         private const val TAG = "LinkClient"
         private const val CONNECT_TIMEOUT_MS = 5_000
-        /** PC pings every 15 s, so 45 s of silence means the link is dead. */
-        private const val READ_TIMEOUT_MS = 45_000
+        /** The PC pings every 45 s (every 15 s on older PCs), so 2 minutes of silence means the link is dead. */
+        private const val READ_TIMEOUT_MS = 120_000
     }
 }

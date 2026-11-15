@@ -121,7 +121,7 @@ class MessageRouter(
             }
             "dnd.set" -> if (store.allowDndControl) NotificationBridge.setDnd(m.bool("enabled") ?: false)
             "media.action" -> if (store.allowMediaControls) MediaBridge.action(m.str("action") ?: "toggle")
-            "media.get" -> MediaBridge.report()
+            "media.get" -> { MediaBridge.resetSent(); MediaBridge.report() }
             "clipboard.set" -> if (store.allowClipboard) setClipboard(m.str("text") ?: "")
 
             // Calls

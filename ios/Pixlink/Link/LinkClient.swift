@@ -177,9 +177,10 @@ final class LinkClient: ObservableObject {
             "platform": "ios",
             "via": "wifi",
         ]))
-        sendStatus()
+        sendStatus(force: true)
         pingTimer?.invalidate()
-        pingTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { _ in
+        // Rare pings: each one wakes the radio. (The PC itself only expects to hear from us every few minutes.)
+        pingTimer = Timer.scheduledTimer(withTimeInterval: 35, repeats: true) { _ in
             Task { @MainActor in LinkClient.shared.send(Envelope("ping")) }
         }
     }
@@ -236,15 +237,19 @@ final class LinkClient: ObservableObject {
         }
     }
 
-    func sendStatus() {
+    private var lastStatus: [Int] = []
+
+    /// Battery and charging, sent only when they change (or to a PC that just connected).
+    func sendStatus(force: Bool = false) {
         guard state == .connected else { return }
         let device = UIDevice.current
         let level = device.batteryLevel
-        send(Envelope("status", [
-            "battery": level < 0 ? -1 : Int((level * 100).rounded()),
-            "charging": device.batteryState == .charging || device.batteryState == .full,
-            "dnd": false,
-        ]))
+        let battery = level < 0 ? -1 : Int((level * 100).rounded())
+        let charging = device.batteryState == .charging || device.batteryState == .full
+        let now = [battery, charging ? 1 : 0]
+        if !force && now == lastStatus { return }
+        lastStatus = now
+        send(Envelope("status", ["battery": battery, "charging": charging, "dnd": false]))
     }
 
     // MARK: - Messages from the PC

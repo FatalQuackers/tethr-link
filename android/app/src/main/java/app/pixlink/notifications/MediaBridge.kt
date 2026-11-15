@@ -67,15 +67,24 @@ object MediaBridge {
             val pm = appContext?.packageManager
             runCatching { pm?.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
         }
-        LinkHub.send(msg("media.state") {
+        val env = msg("media.state") {
             put("active", c != null && meta != null)
             put("playing", c?.playbackState?.state == PlaybackState.STATE_PLAYING)
             meta?.getString(MediaMetadata.METADATA_KEY_TITLE)?.let { put("title", it) }
             (meta?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: meta?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST))
                 ?.let { put("artist", it) }
             appName?.let { put("app", it) }
-        })
+        }
+        // Players report the same state many times (seeking, buffering): send changes only.
+        val key = env.d.toString()
+        if (key == lastSent || !LinkHub.isConnected) return
+        lastSent = key
+        LinkHub.send(env)
     }
+
+    @Volatile private var lastSent: String? = null
+    /** A PC connected: let the next report go out even if nothing changed. */
+    fun resetSent() { lastSent = null }
 
     fun action(name: String) = main.post {
         val t = controller?.transportControls ?: return@post
