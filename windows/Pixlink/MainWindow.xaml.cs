@@ -203,6 +203,7 @@ public sealed partial class MainWindow : Window
         var h = IsHidden;
         if (h == _hidden) return;
         _hidden = h;
+        PowerSaver.Set(h); // Efficiency mode while hidden or minimized
         HiddenChanged?.Invoke(h);
     }
 
