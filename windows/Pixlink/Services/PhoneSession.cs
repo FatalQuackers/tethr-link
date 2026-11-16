@@ -188,7 +188,8 @@ public partial class PhoneSession : ObservableObject
     private async Task SendPcInfoAsync()
     {
         var bt = _settings.AllowBluetooth ? await BluetoothLinkServer.AddressAsync() : null;
-        await SendAsync(Envelope.Of("pc.info", new { bt, bluetooth = _settings.AllowBluetooth && bt is not null, phoneWake = _settings.AllowPhoneWake }));
+        await SendAsync(Envelope.Of("pc.info", new { bt, bluetooth = _settings.AllowBluetooth && bt is not null, phoneWake = _settings.AllowPhoneWake,
+            nearby = _settings.NearbyConnect && IPhoneBt.State != IPhoneBluetooth.LinkState.NotSupported }));
     }
 
     // ---------- Pairing ----------
@@ -447,7 +448,7 @@ public partial class PhoneSession : ObservableObject
             });
         }
         IPhoneBt.ReadNotifications = IsIPhone;
-        if (IsPaired && (IsIPhone || _settings.AllowPhoneWake)) _ = IPhoneBt.StartAsync(_settings.PcId);
+        if (IsPaired && (IsIPhone || _settings.AllowPhoneWake || _settings.NearbyConnect)) _ = IPhoneBt.StartAsync(_settings.PcId);
         else IPhoneBt.Stop();
     }
 
@@ -455,6 +456,15 @@ public partial class PhoneSession : ObservableObject
     public void SetAllowPhoneWake(bool allow)
     {
         _settings.AllowPhoneWake = allow;
+        _settings.Save();
+        StartIPhoneBluetooth();
+        _ = SendPcInfoAsync();
+    }
+
+    /// <summary>Connect when the phone is nearby: the PC sends its Bluetooth LE signal.</summary>
+    public void SetNearbyConnect(bool on)
+    {
+        _settings.NearbyConnect = on;
         _settings.Save();
         StartIPhoneBluetooth();
         _ = SendPcInfoAsync();

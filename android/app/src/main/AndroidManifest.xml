@@ -32,6 +32,8 @@
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- Connect when near your PC: watches for the PC's Bluetooth signal (never used for location). -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" tools:targetApi="s" />
     <!-- Quiet mode: Tethr Link as the companion app of the PC (no always-on notification). -->
     <uses-feature android:name="android.software.companion_device_setup" android:required="false" />
     <uses-permission android:name="android.permission.REQUEST_COMPANION_RUN_IN_BACKGROUND" />
@@ -131,6 +133,7 @@
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info" />
         </receiver>
         <receiver android:name=".widget.WidgetActions" android:exported="false" />
+        <receiver android:name=".companion.NearbyReceiver" android:exported="false" />
         <service
             android:name=".companion.PixlinkCompanionService"
             android:exported="true"

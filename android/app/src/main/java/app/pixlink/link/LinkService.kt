@@ -53,6 +53,7 @@ class LinkService : LifecycleService() {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         store = PairedStore(this)
         status = StatusReporter(this)
 
@@ -83,6 +84,7 @@ class LinkService : LifecycleService() {
         lifecycleScope.launch {
             LinkHub.states.collect {
                 refreshNotification()
+                app.pixlink.companion.NearbyWatcher.update(this@LinkService, screenOn)
                 runCatching { app.pixlink.widget.PixlinkWidget.update(this@LinkService) }
             }
         }
@@ -365,6 +367,7 @@ class LinkService : LifecycleService() {
 
     private fun wakeAll() = wakes.values.forEach { it.trySend(Unit) }
 
+
     /** Reconnect as soon as Wi-Fi is back or the screen turns on, instead of on a timer. */
     private fun watchNetworkAndScreen() {
         val cm = getSystemService(android.net.ConnectivityManager::class.java)
@@ -390,6 +393,7 @@ class LinkService : LifecycleService() {
     }
 
     override fun onDestroy() {
+        if (instance === this) instance = null
         runCatching { unregisterReceiver(screenReceiver) }
         netCallback?.let { cb -> runCatching { getSystemService(android.net.ConnectivityManager::class.java).unregisterNetworkCallback(cb) } }
         app.pixlink.messages.SmsBridge.stopWatching(this)
@@ -442,6 +446,15 @@ class LinkService : LifecycleService() {
         private const val EXTRA_PAIR_URI = "uri"
 
         private const val EXTRA_FOREGROUND = "foreground"
+        @Volatile private var instance: LinkService? = null
+
+        /** Reconnect every PC now (e.g. it just came into Bluetooth range). False if the service isn't running. */
+        fun wakeNow(): Boolean {
+            val s = instance ?: return false
+            s.searchingSince = System.currentTimeMillis()
+            s.wakeAll()
+            return true
+        }
 
         /** Starts (or refreshes) connections to every paired PC. */
         fun start(context: Context) = launch(context, Intent(context, LinkService::class.java))

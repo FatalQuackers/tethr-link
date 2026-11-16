@@ -11,7 +11,7 @@ import app.pixlink.link.LinkService
 class PixlinkCompanionService : CompanionDeviceService() {
     @Deprecated("Deprecated in Android 16, still called on 13–15")
     override fun onDeviceAppeared(associationInfo: AssociationInfo) {
-        runCatching { LinkService.start(this) }
+        if (!LinkService.wakeNow()) runCatching { LinkService.start(this) }
     }
 
     @Deprecated("Deprecated in Android 16, still called on 13–15")

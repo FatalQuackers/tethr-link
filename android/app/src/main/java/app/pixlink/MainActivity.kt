@@ -128,6 +128,7 @@ class MainActivity : ComponentActivity() {
                 Manifest.permission.READ_MEDIA_IMAGES,
                 Manifest.permission.READ_MEDIA_VIDEO,
                 Manifest.permission.BLUETOOTH_CONNECT,
+                Manifest.permission.BLUETOOTH_SCAN, // connect when near your PC
             )
         )
     }

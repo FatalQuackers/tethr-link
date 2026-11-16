@@ -203,6 +203,8 @@ extension BluetoothLink: CBPeripheralDelegate {
             self.savedPeripheral = peripheral.identifier
             self.state = .connected
             self.writeStatus()
+            // Back in range of the PC: reconnect the Wi-Fi link straight away (if Tethr Link is open).
+            if UIApplication.shared.applicationState == .active { LinkClient.shared.resume() }
         }
     }
 }

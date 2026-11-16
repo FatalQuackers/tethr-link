@@ -50,6 +50,8 @@ public sealed class AppSettings
     public bool AllowBluetooth { get; set; } = true;
     /// <summary>Opt-in: advertise this PC over Bluetooth LE so a Pixel can run without its always-on notification.</summary>
     public bool AllowPhoneWake { get; set; }
+    /// <summary>Send a Bluetooth LE signal so the phone connects as soon as it's nearby. On by default.</summary>
+    public bool NearbyConnect { get; set; } = true;
     /// <summary>The version.build whose "What's new" screen has been shown.</summary>
     public string? WhatsNewSeen { get; set; }
 

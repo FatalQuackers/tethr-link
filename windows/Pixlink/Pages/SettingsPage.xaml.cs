@@ -188,6 +188,7 @@ public sealed partial class SettingsPage : Page
         StopHiddenSwitch.IsOn = st.StopMirrorWhenHidden;
         BluetoothSwitch.IsOn = st.AllowBluetooth;
         PhoneWakeSwitch.IsOn = st.AllowPhoneWake;
+        NearbySwitch.IsOn = st.NearbyConnect;
         UpdatePhoneWakeStatus();
         QuickActionsHint.Text = string.Join(", ", st.QuickActions
             .Select(id => Pixlink.Models.QuickActionItem.Catalog.FirstOrDefault(c => c.Id == id).Name)
@@ -212,6 +213,12 @@ public sealed partial class SettingsPage : Page
     {
         if (_loadingLayout) return;
         await App.Session.SetAllowBluetoothAsync(BluetoothSwitch.IsOn);
+    }
+
+    private void OnNearbyToggled(object sender, RoutedEventArgs e)
+    {
+        if (_loadingLayout) return;
+        App.Session.SetNearbyConnect(NearbySwitch.IsOn);
     }
 
     private async void OnPhoneWakeToggled(object sender, RoutedEventArgs e)

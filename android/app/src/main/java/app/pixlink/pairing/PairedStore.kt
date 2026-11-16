@@ -21,6 +21,8 @@ data class PairedPc(
     val bt: String? = null,
     /** The PC lets this phone find it over Bluetooth (for running without the always-on notification). */
     val wake: Boolean = false,
+    /** The PC sends its Bluetooth signal so this phone can connect as soon as it's nearby. */
+    val nearby: Boolean = false,
 )
 
 /** Small key-value store for pairing and user settings. */
@@ -57,11 +59,17 @@ class PairedStore(context: Context) {
         pcs = pcs.map { if (it.id == id) it.copy(host = host) else it }
     }
 
-    fun updateWake(id: String, wake: Boolean) {
+    fun updateWake(id: String, wake: Boolean, nearby: Boolean = false) {
         val list = pcs
-        if (list.firstOrNull { it.id == id }?.wake == wake) return
-        pcs = list.map { if (it.id == id) it.copy(wake = wake) else it }
+        val pc = list.firstOrNull { it.id == id } ?: return
+        if (pc.wake == wake && pc.nearby == nearby) return
+        pcs = list.map { if (it.id == id) it.copy(wake = wake, nearby = nearby) else it }
     }
+
+    /** Connect as soon as the PC is nearby (Bluetooth). On unless turned off. */
+    var nearbyConnect: Boolean
+        get() = prefs.getBoolean("nearbyConnect", true)
+        set(v) = prefs.edit { putBoolean("nearbyConnect", v) }
 
     /** Opt-in: run without the always-on notification, woken by Bluetooth when a PC is nearby. */
     var quietMode: Boolean

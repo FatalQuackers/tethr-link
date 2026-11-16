@@ -43,17 +43,44 @@ object ClipboardSync {
     }
 
     // "Your code is 123456", "G-123456 is your Google verification code", "OTP: 4821"…
-    private val keyword = Regex("""\b(code|otp|passcode|pin|verification|verify|one[- ]time|security|login|sign[- ]in|2fa|authenticat)""", RegexOption.IGNORE_CASE)
-    private val candidate = Regex("""(?<![\d-])(?:[A-Z]-)?(\d{4,8}|\d{3}[- ]\d{3})(?![\d])""")
+    // A number only counts as a code when a code word is right next to it (not just somewhere in the
+    // notification), and never when it looks like part of an address, phone number, price or order.
+    private val keyword = Regex("""\b(codes?|otp|passcode|pin|verification|verify|one[- ]time|2fa|mfa|authenticat\w*|security code|login code|sign[- ]in code)\b""", RegexOption.IGNORE_CASE)
+    private val strongKeyword = Regex("""\b(codes?|otp|passcode|pin|2fa|mfa)\b""", RegexOption.IGNORE_CASE)
+    private val candidate = Regex("""(?<![\w$€£¥#/.:+(-])(?:[A-Z]{1,3}-)?(\d{3}[- ]\d{3}|\d{4,8})(?![\d%]|[.,:/]\d|\w)""")
+    private val notACode = Regex(
+        """\b(st|street|rd|road|ave|avenue|unit|suite|ste|level|lvl|floor|apt|apartment|box|drive|dr|lane|ln|way|blvd|boulevard|court|ct|place|pl|crescent|cres|parade|pde|highway|hwy|terrace|tce|close|circuit|square|sq|nsw|vic|qld|tas|act|nt|wa|sa|postcode|post code|zip|order|invoice|ref|reference|account|acct|ticket|tracking|flight|booking|ending|card|phone|tel|call|ph|fax|abn|acn|mobile|room|seat|version|v|build|total|amount|balance|aud|usd|eur|gbp|km|kg|mb|gb|px)\b""",
+        RegexOption.IGNORE_CASE,
+    )
+    private val sentenceEnd = Regex("""[.;!?]\s""")
+    private val sentenceEndAfter = Regex("""[.;!?](?:\s|$)""")
 
-    fun findCode(text: String): String? {
-        if (!keyword.containsMatchIn(text)) return null
-        return candidate.findAll(text)
-            .map { it.groupValues[1].replace(" ", "").replace("-", "") }
-            .firstOrNull { it.length in 4..8 && !looksLikeYear(it) }
+    fun findCode(fullText: String): String? {
+        val text = fullText.take(500) // subject and first lines; email footers (addresses!) come later
+        val keywords = keyword.findAll(text).map { it.range }.toList()
+        if (keywords.isEmpty()) return null
+        val strong = strongKeyword.findAll(text).map { it.range }.toList()
+        fun gap(r: IntRange, s: Int, e: Int) = if (r.last < s) s - r.last - 1 else if (r.first >= e) r.first - e else 0
+        var best: Pair<Int, String>? = null
+        for (m in candidate.findAll(text)) {
+            val group = m.groups[1] ?: continue
+            val code = group.value.replace(" ", "").replace("-", "")
+            if (code.length !in 4..8) continue
+            if (code.length == 4 && code.toInt() in 1990..2099) continue // a year
+            val s = m.range.first
+            val e = m.range.last + 1
+            // The words right around it, within the same sentence.
+            val before = text.substring(maxOf(0, s - 14), s).split(sentenceEnd).last()
+            val after = text.substring(e, minOf(text.length, e + 14)).split(sentenceEndAfter).first()
+            if (notACode.containsMatchIn(before) || notACode.containsMatchIn(after)) continue
+            if (Regex("""\d[\s-]?$""").containsMatchIn(before) || Regex("""^[\s-]?\d{2}""").containsMatchIn(after)) continue // phone number
+            val distance = keywords.minOf { gap(it, s, e) }
+            if (code.length < 6 && strong.none { gap(it, s, e) <= 25 }) continue // short numbers need "code"/"PIN" right there
+            if (distance > (if (code.length >= 6) 50 else 25)) continue
+            if (best == null || distance < best.first) best = distance to code
+        }
+        return best?.second
     }
-
-    private fun looksLikeYear(s: String) = s.length == 4 && s.toInt() in 1990..2099
 
     /** Called for every new notification: if it carries a sign-in code, copy it on the PC. */
     fun maybeSendCode(context: Context, app: String, title: String, text: String) {

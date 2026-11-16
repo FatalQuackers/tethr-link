@@ -115,6 +115,16 @@ fun SettingsScreen(onBack: () -> Unit, onChooseApps: () -> Unit) {
             Section("Your PC can")
             SwitchRow("Ring this phone", "Find it at full volume, even on silent", ring) { ring = it; store.allowRing = it }
             ConnectViaRow(store)
+            var nearby by remember { mutableStateOf(store.nearbyConnect) }
+            SwitchRow(
+                "Connect when near my PC",
+                if (store.pcs.any { it.nearby }) "Reconnects as soon as your PC is in Bluetooth range. Uses almost no battery."
+                else "Reconnects as soon as your PC is in Bluetooth range. Turn on Connect when my phone is nearby in the PC's settings too.",
+                nearby,
+            ) {
+                nearby = it; store.nearbyConnect = it
+                app.pixlink.companion.NearbyWatcher.update(ctx)
+            }
             SwitchRow("Let my PC copy to this phone", "Copy on your PC, paste here", clip) { clip = it; store.allowClipboard = it }
             var codes by remember { mutableStateOf(store.sendCodes) }
             SwitchRow("Copy sign-in codes to my PC", "Verification codes from your texts and apps, ready to paste", codes) { codes = it; store.sendCodes = it }
