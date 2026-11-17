@@ -156,19 +156,21 @@ public partial class PhoneSession : ObservableObject
         UpdatePhase();
         RebuildQuickActions();
         StartClipboardSync();
-        Log.Info("Tethr Link started" + (AppSettings.IsPortable ? " (portable)" : ""));
+        Log.Info($"Tethr Link started (build {Updater.CurrentBuild})" + (AppSettings.IsPortable ? " (portable)" : ""));
 
         var server = new LinkServer(_cert, () => _settings.PhoneFingerprint, () => PairingOpen || AccountPairingOpen);
         server.Connected += OnConnected;
+        // Listen for the phone first: nothing below (Bluetooth, Bonjour, the optional account) may hold it up.
+        var serverTask = Task.Run(() => server.RunAsync(_cts.Token));
         _bluetooth = new BluetoothLinkServer(server);
         if (_settings.AllowBluetooth) _ = _bluetooth.StartAsync(_cts.Token);
         _ = Mirror.RunAsync(_cts.Token);
         _ = Beacon.RunAsync(BeaconPayload, _cts.Token);
-        _ = Bonjour.StartAsync(_settings.PcId);
-        StartIPhoneBluetooth();
+        try { _ = Bonjour.StartAsync(_settings.PcId); } catch (Exception ex) { Log.Info($"Bonjour is off: {ex.Message}"); }
+        try { StartIPhoneBluetooth(); } catch (Exception ex) { Log.Info($"Bluetooth nearby signal is off: {ex.Message}"); }
         // The account is optional: nothing it does may stop the phone link from starting.
         try { StartAccount(); } catch (Exception ex) { Log.Info($"Account features are off: {ex.Message}"); }
-        try { await server.RunAsync(_cts.Token); }
+        try { await serverTask; }
         catch (OperationCanceledException) { }
         catch (Exception ex) { Log.Info($"The phone link stopped: {ex.Message}"); }
     }

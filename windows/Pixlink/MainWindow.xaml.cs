@@ -300,7 +300,8 @@ public sealed partial class MainWindow : Window
             if (quiet) await Task.Delay(TimeSpan.FromSeconds(5));
             _update = await Updater.CheckAsync();
             if (_update is null) return;
-            if (Session.Settings.AutoCheckUpdates) await InstallWhenIdleAsync(_update);
+            // Test builds (version 0.0.x from the test page) never replace themselves on their own.
+            if (Session.Settings.AutoCheckUpdates && Updater.Current.Major > 0) await InstallWhenIdleAsync(_update);
             else ShowUpdate(_update);
         }
         catch (Exception ex) when (quiet) { Crash.Log(ex, "Update check"); }
