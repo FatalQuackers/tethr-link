@@ -228,6 +228,57 @@ public sealed partial class SettingsPage : Page
         CheckButton.IsEnabled = true;
     }
 
+    /// <summary>
+    /// Installed copies run the uninstaller (unins000.exe next to Pixlink.exe). Portable copies have nothing
+    /// installed: deleting their folder removes everything, so the button opens it and quits.
+    /// </summary>
+    private async void OnUninstall(object sender, RoutedEventArgs e)
+    {
+        var uninstaller = Path.Combine(AppContext.BaseDirectory, "unins000.exe");
+        var portable = AppSettings.IsPortable || !File.Exists(uninstaller);
+        var deleteData = new CheckBox { Content = "Also delete my settings and phone pairing", IsChecked = true };
+        var panel = new StackPanel { Spacing = 12 };
+        panel.Children.Add(new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Text = portable
+                ? "This is a portable copy, so nothing is installed. Tethr Link will close and open its folder: delete the folder to remove it completely."
+                : "Tethr Link will close and Windows will remove it from this PC." +
+                  (App.Session.Account.SignedIn ? " This PC will also be taken out of your account." : ""),
+        });
+        if (!portable) panel.Children.Add(deleteData);
+        var result = await new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "Uninstall Tethr Link?",
+            Content = panel,
+            PrimaryButtonText = portable ? "Close and open folder" : "Uninstall",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+        }.ShowAsync();
+        if (result != ContentDialogResult.Primary) return;
+
+        // Leave the account tidy: a removed PC shouldn't show up on the phone's "Add from my account".
+        if (App.Session.Account.SignedIn) { try { await App.Session.SignOutAsync(); } catch { } }
+
+        try
+        {
+            if (portable)
+            {
+                System.Diagnostics.Process.Start("explorer.exe", $"\"{AppContext.BaseDirectory.TrimEnd('\\')}\"");
+            }
+            else
+            {
+                Directory.CreateDirectory(AppSettings.Folder);
+                File.WriteAllText(Path.Combine(AppSettings.Folder, deleteData.IsChecked == true ? "delete-on-uninstall" : "keep-on-uninstall"), "");
+                // The uninstaller closes Pixlink.exe itself (taskkill), so start it, then quit.
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uninstaller) { UseShellExecute = true });
+            }
+        }
+        catch (Exception ex) { Crash.Log(ex, "Uninstall"); return; }
+        App.Window?.Quit();
+    }
+
     private async void OnUnpair(object sender, RoutedEventArgs e)
     {
         var result = await new ContentDialog

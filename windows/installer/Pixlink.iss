@@ -55,3 +55,34 @@ Filename: "{sys}\reg.exe"; Parameters: "delete HKCU\Software\Microsoft\Windows\C
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"
+
+[Code]
+// Settings and pairing live in %LOCALAPPDATA%\Pixlink. Tethr Link's own "Uninstall" button leaves a
+// note saying whether to delete them; uninstalling from Windows Settings asks instead.
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  DataDir: String;
+  DeleteData: Boolean;
+begin
+  if CurUninstallStep = usPostUninstall then
+  begin
+    DataDir := ExpandConstant('{localappdata}\Pixlink');
+    if not DirExists(DataDir) then Exit;
+    if FileExists(DataDir + '\delete-on-uninstall') then
+      DeleteData := True
+    else if FileExists(DataDir + '\keep-on-uninstall') then
+      DeleteData := False
+    else if UninstallSilent then
+      DeleteData := False
+    else
+      DeleteData := MsgBox('Also delete your Tethr Link settings and phone pairing?' #13#10#13#10 +
+        'Choose No if you plan to install Tethr Link again and want to keep them.',
+        mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;
+    if DeleteData then
+      DelTree(DataDir, True, True, True)
+    else
+    begin
+      DeleteFile(DataDir + '\keep-on-uninstall');
+    end;
+  end;
+end;

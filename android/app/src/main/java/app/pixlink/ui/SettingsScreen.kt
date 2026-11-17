@@ -63,6 +63,7 @@ fun SettingsScreen(onBack: () -> Unit, onChooseApps: () -> Unit) {
     var checking by remember { mutableStateOf(false) }
     var updateStatus by remember { mutableStateOf<String?>(null) }
     var folders by remember { mutableIntStateOf(ctx.contentResolver.persistedUriPermissions.size) }
+    var confirmUninstall by remember { mutableStateOf(false) }
 
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
@@ -209,7 +210,35 @@ fun SettingsScreen(onBack: () -> Unit, onChooseApps: () -> Unit) {
                     ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/FatalQuackers/tethr-link")))
                 },
             )
+            ListItem(
+                headlineContent = { Text("Uninstall Tethr Link", color = MaterialTheme.colorScheme.error) },
+                supportingContent = { Text("Removes the app and everything it saved from this phone") },
+                modifier = Modifier.clickable { confirmUninstall = true },
+            )
         }
+    }
+
+    if (confirmUninstall) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirmUninstall = false },
+            title = { Text("Uninstall Tethr Link?") },
+            text = { Text("Tethr Link and its settings will be removed from this phone. To unlink it on your PC too, open Tethr Link there → Settings → Unlink phone.") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    confirmUninstall = false
+                    scope.launch {
+                        runCatching { app.pixlink.account.Account.signOut(ctx) }
+                        val pkg = Uri.parse("package:${ctx.packageName}")
+                        // Android shows its own "Uninstall?" prompt; fall back to the app's settings page.
+                        runCatching { ctx.startActivity(Intent(Intent.ACTION_DELETE, pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                            .onFailure {
+                                ctx.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                            }
+                    }
+                }) { Text("Uninstall", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { confirmUninstall = false }) { Text("Cancel") } },
+        )
     }
 }
 

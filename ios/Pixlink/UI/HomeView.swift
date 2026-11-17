@@ -8,6 +8,7 @@ struct HomeView: View {
     @State private var pickingPhotos = false
     @State private var pickingFiles = false
     @State private var confirmForget = false
+    @State private var confirmUninstall = false
     @State private var showingFeatures = false
     @State private var showingWhatsNew = false
     @State private var ringingPC = false
@@ -74,6 +75,7 @@ struct HomeView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button(role: .destructive) { confirmForget = true } label: { Label("Forget this PC", systemImage: "xmark.circle") }
+                        Button(role: .destructive) { confirmUninstall = true } label: { Label("Uninstall Tethr Link", systemImage: "trash") }
                     } label: { Image(systemName: "ellipsis.circle") }
                 }
             }
@@ -81,6 +83,16 @@ struct HomeView: View {
                 Button("Forget PC", role: .destructive) { link.forget() }
             } message: {
                 Text("You'll need to scan the QR code again to link them. On the PC, unpair the phone in Settings too.")
+            }
+            // iOS doesn't let an app remove itself: clear everything here, then remove it from the Home Screen.
+            .alert("Uninstall Tethr Link?", isPresented: $confirmUninstall) {
+                Button("Clear and continue", role: .destructive) {
+                    link.forget()
+                    Task { await Account.shared.signOut() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This forgets your PC and signs you out. Then go to your Home Screen, press and hold the Tethr Link icon, and tap Remove App → Delete App. On the PC, unlink the phone in Settings too.")
             }
             .sheet(isPresented: $pickingPhotos) {
                 PhotoPicker { urls in Task { await link.sendFiles(urls) } }

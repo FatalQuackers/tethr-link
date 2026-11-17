@@ -344,7 +344,7 @@
             <TextBlock Text="Privacy and security" Style="{StaticResource Section}" />
             <Border Style="{StaticResource Row}">
                 <StackPanel Spacing="4">
-                    <TextBlock TextWrapping="Wrap" Text="Everything travels directly between your phone and PC on your network, encrypted with TLS. No cloud, no account." />
+                    <TextBlock TextWrapping="Wrap" Text="Everything travels directly between your phone and PC on your network, encrypted with TLS. The account is optional and only holds your PC's name, address and a one-time pairing key." />
                     <TextBlock x:Name="FingerprintText" Style="{StaticResource Hint}" IsTextSelectionEnabled="True" />
                 </StackPanel>
             </Border>
@@ -355,6 +355,16 @@
                         <TextBlock Text="Unlink to pair a different phone" Style="{StaticResource Hint}" />
                     </StackPanel>
                     <Button Content="Unlink phone" HorizontalAlignment="Right" Click="OnUnpair" />
+                </Grid>
+            </Border>
+
+            <Border Style="{StaticResource Row}">
+                <Grid>
+                    <StackPanel Margin="0,0,150,0">
+                        <TextBlock Text="Uninstall Tethr Link" />
+                        <TextBlock x:Name="UninstallHint" Style="{StaticResource Hint}" Text="Removes the app from this PC. You can keep or delete your settings." />
+                    </StackPanel>
+                    <Button Content="Uninstall…" HorizontalAlignment="Right" Click="OnUninstall" />
                 </Grid>
             </Border>
 

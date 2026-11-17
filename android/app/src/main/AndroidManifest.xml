@@ -15,6 +15,8 @@
     <!-- Self-updates from GitHub releases, and reconnecting after updates / restarts.
          (A Google Play build would drop REQUEST_INSTALL_PACKAGES: Play updates apps itself.) -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Settings → Uninstall Tethr Link (Android still asks the user to confirm) -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Pairing -->
