@@ -59,6 +59,12 @@ public sealed class AppSettings
     public bool AutoClipboard { get; set; } = true;
     public bool CopyCodes { get; set; } = true;
 
+    // Connect from anywhere (relay)
+    /// <summary>Let the phone connect through the internet when Wi-Fi and Bluetooth can't reach this PC.</summary>
+    public bool AllowInternet { get; set; } = true;
+    /// <summary>Secret shared with the paired phone; names this PC's relay room.</summary>
+    public string? RelayKey { get; set; }
+
     // Account (optional)
     /// <summary>Lets a phone signed in to the same account add this PC without a QR code. Changes after each use.</summary>
     public string? AccountPairToken { get; set; }

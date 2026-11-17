@@ -306,6 +306,7 @@ public sealed partial class SettingsPage : Page
         CodesSwitch.IsOn = st.CopyCodes;
         StopHiddenSwitch.IsOn = st.StopMirrorWhenHidden;
         BluetoothSwitch.IsOn = st.AllowBluetooth;
+        InternetSwitch.IsOn = st.AllowInternet;
         PhoneWakeSwitch.IsOn = st.AllowPhoneWake;
         NearbySwitch.IsOn = st.NearbyConnect;
         UpdatePhoneWakeStatus();
@@ -326,6 +327,13 @@ public sealed partial class SettingsPage : Page
         st.StopMirrorWhenHidden = StopHiddenSwitch.IsOn;
         st.Save();
         App.Window?.RefreshLayout();
+    }
+
+    private void OnInternetToggled(object sender, RoutedEventArgs e)
+    {
+        if (_loadingLayout) return;
+        App.Session.Settings.AllowInternet = InternetSwitch.IsOn;
+        App.Session.Settings.Save();
     }
 
     private async void OnBluetoothToggled(object sender, RoutedEventArgs e)

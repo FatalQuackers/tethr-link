@@ -82,6 +82,7 @@ class MessageRouter(
             "pc.info" -> pcId?.let {
                 store.updateBluetooth(it, m.str("bt")?.takeIf { _ -> m.bool("bluetooth") == true })
                 store.updateWake(it, m.bool("phoneWake") == true, m.bool("nearby") == true)
+                store.updateRelay(it, m.str("relay"), m.str("relayHost")?.takeIf { h -> !h.contains("RELAY_SUBDOMAIN") })
             }
 
             // Power mode extras (the PC shows "needs Power mode" when it's off)

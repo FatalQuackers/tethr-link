@@ -23,6 +23,9 @@ data class PairedPc(
     val wake: Boolean = false,
     /** The PC sends its Bluetooth signal so this phone can connect as soon as it's nearby. */
     val nearby: Boolean = false,
+    /** Secret for the PC's relay room (connect from anywhere), and the relay's address. */
+    val relay: String? = null,
+    val relayHost: String? = null,
 )
 
 /** Small key-value store for pairing and user settings. */
@@ -97,6 +100,12 @@ class PairedStore(context: Context) {
         get() = prefs.getInt("whatsNewSeen", 0)
         set(v) = prefs.edit { putInt("whatsNewSeen", v) }
 
+    fun updateRelay(id: String, key: String?, host: String?) {
+        val pc = pc(id) ?: return
+        if (pc.relay == key && pc.relayHost == host) return
+        pcs = pcs.map { if (it.id == id) it.copy(relay = key, relayHost = host) else it }
+    }
+
     fun updateBluetooth(id: String, address: String?) {
         if (pc(id)?.bt == address) return
         pcs = pcs.map { if (it.id == id) it.copy(bt = address) else it }
@@ -111,6 +120,11 @@ class PairedStore(context: Context) {
         }
 
     /** How to reach the PCs: "auto" (Wi-Fi, then Bluetooth), "wifi" or "bluetooth". */
+    /** Connect through the internet relay when Wi-Fi and Bluetooth can't reach the PC. */
+    var allowInternet: Boolean
+        get() = prefs.getBoolean("allowInternet", true)
+        set(v) = prefs.edit { putBoolean("allowInternet", v) }
+
     var connectVia: String
         get() = prefs.getString("connectVia", "auto") ?: "auto"
         set(v) = prefs.edit { putString("connectVia", v) }

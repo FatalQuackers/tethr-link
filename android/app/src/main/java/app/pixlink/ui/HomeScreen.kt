@@ -336,7 +336,11 @@ private fun PcCard(pc: PairedPc, state: LinkState?, onPair: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     var confirmForget by remember { mutableStateOf(false) }
     val (dot, label) = when (state) {
-        is LinkState.Connected -> Green to (if (state.viaBluetooth) "Connected over Bluetooth" else "Connected")
+        is LinkState.Connected -> Green to when {
+            state.viaBluetooth -> "Connected over Bluetooth"
+            state.viaInternet -> "Connected over the internet"
+            else -> "Connected"
+        }
         is LinkState.Connecting -> Amber to "Connecting…"
         is LinkState.Error -> MaterialTheme.colorScheme.error to state.message
         else -> MaterialTheme.colorScheme.outline to "Not connected"

@@ -145,11 +145,18 @@ class LinkService : LifecycleService() {
 
             // Routes to try, in order: Wi-Fi, then Bluetooth when Wi-Fi can't reach the PC.
             // No Wi-Fi at all? Don't even try it (saves waking the radio for nothing).
+            // Wi-Fi first, then the internet relay (connect from anywhere), then Bluetooth.
             val routes = when (store.connectVia) {
-                "wifi" -> listOf(false)
-                "bluetooth" -> listOf(true)
-                else -> listOf(false, true)
-            }.filter { !it || pc.bt != null }.filter { it || onWifi }
+                "wifi" -> listOf(ROUTE_WIFI)
+                "bluetooth" -> listOf(ROUTE_BT)
+                else -> listOf(ROUTE_WIFI, ROUTE_INTERNET, ROUTE_BT)
+            }.filter { r ->
+                when (r) {
+                    ROUTE_WIFI -> onWifi
+                    ROUTE_BT -> pc.bt != null
+                    else -> pc.relay != null && pc.relayHost != null && store.allowInternet
+                }
+            }
             if (routes.isEmpty()) {
                 LinkHub.lastDisconnectReason[pcId] = if (pc.bt == null)
                     "Not on Wi-Fi. Bluetooth isn't set up for ${pc.name} yet: connect once on the same Wi-Fi first."
@@ -160,22 +167,31 @@ class LinkService : LifecycleService() {
                 continue
             }
 
-            for (bluetooth in routes) {
+            for (route in routes) {
+                val bluetooth = route == ROUTE_BT
                 var connected = false
                 var tunnel: BluetoothTunnel? = null
+                var relay: RelayTunnel? = null
                 lateinit var client: LinkClient
                 try {
-                    val (host, port) = if (bluetooth) {
-                        tunnel = BluetoothTunnel.open(this, pc.bt!!)
-                        "127.0.0.1" to tunnel.localPort
-                    } else pc.host to pc.port
+                    val (host, port) = when (route) {
+                        ROUTE_BT -> {
+                            tunnel = BluetoothTunnel.open(this, pc.bt!!)
+                            "127.0.0.1" to tunnel.localPort
+                        }
+                        ROUTE_INTERNET -> {
+                            relay = RelayTunnel.open(pc.relayHost!!, pc.relay!!)
+                            "127.0.0.1" to relay.localPort
+                        }
+                        else -> pc.host to pc.port
+                    }
                     client = LinkClient(
                         host, port, pc.fingerprint,
                         onConnected = { c ->
                             connected = true
                             backoffMs = 1_000L
                             LinkHub.attach(pcId, c)
-                            sendHello(c, pcId, pc.name, bluetooth)
+                            sendHello(c, pcId, pc.name, route)
                         },
                         onMessage = MessageRouter(this, store, pcId, out = { client.send(it) })::handle,
                     )
@@ -189,13 +205,18 @@ class LinkService : LifecycleService() {
                     }
                 } catch (e: Exception) {
                     LinkHub.lastDisconnectReason[pcId] =
-                        if (bluetooth) "Bluetooth: ${e.message ?: "couldn't reach ${pc.name}"}" else describe(e, pc.name, pc.host, pc.port)
+                        when (route) {
+                            ROUTE_BT -> "Bluetooth: ${e.message ?: "couldn't reach ${pc.name}"}"
+                            ROUTE_INTERNET -> "Internet: ${e.message ?: "couldn't reach ${pc.name}"}"
+                            else -> describe(e, pc.name, pc.host, pc.port)
+                        }
                     Log.w(TAG, "Connection to ${pc.name} failed: ${LinkHub.lastDisconnectReason[pcId]}")
                     if (e is javax.net.ssl.SSLHandshakeException) {
                         LinkHub.setState(pcId, LinkState.Error("${pc.name} no longer recognises your phone. Pair again."))
                     }
                 } finally {
                     tunnel?.close()
+                    relay?.close()
                 }
                 // A session that actually connected ended normally: start again from Wi-Fi.
                 if (connected || LinkHub.states.value[pcId] is LinkState.Error) break
@@ -210,16 +231,16 @@ class LinkService : LifecycleService() {
         }
     }
 
-    private fun sendHello(client: LinkClient, pcId: String, pcName: String, bluetooth: Boolean = false) {
+    private fun sendHello(client: LinkClient, pcId: String, pcName: String, route: String = ROUTE_WIFI) {
         client.send(msg(MessageTypes.HELLO) {
-            put("via", if (bluetooth) "bluetooth" else "wifi")
+            put("via", route)
             put("phoneName", store.displayName)
             put("model", Build.MODEL)
             put("appVersion", BuildConfig.VERSION_NAME)
             put("powerMode", PowerMode.isReady)
             put("canControl", PowerMode.isReady || app.pixlink.mirror.ControlService.isEnabled(this@LinkService))
         })
-        LinkHub.setState(pcId, LinkState.Connected(pcName, bluetooth))
+        LinkHub.setState(pcId, LinkState.Connected(pcName, viaBluetooth = route == ROUTE_BT, viaInternet = route == ROUTE_INTERNET))
         status.start()
         status.resend() // the newly connected PC gets battery etc. straight away
     }
@@ -324,8 +345,8 @@ class LinkService : LifecycleService() {
                     }
                     // On Bluetooth but the PC is reachable over Wi-Fi again: switch to the faster link.
                     val st = LinkHub.states.value[id]
-                    if (st is LinkState.Connected && st.viaBluetooth && store.connectVia == "auto") {
-                        Log.i(TAG, "${pc.name} is on Wi-Fi again: switching from Bluetooth")
+                    if (st is LinkState.Connected && st.remote && store.connectVia == "auto") {
+                        Log.i(TAG, "${pc.name} is on Wi-Fi again: switching to Wi-Fi")
                         if (host != pc.host) store.updateHost(id, host)
                         LinkHub.client(id)?.close()
                     }
@@ -349,7 +370,7 @@ class LinkService : LifecycleService() {
         val states = LinkHub.states.value
         val missing = store.pcs.any { pc ->
             val st = states[pc.id]
-            st !is LinkState.Connected || (st.viaBluetooth && store.connectVia == "auto")
+            st !is LinkState.Connected || (st.remote && store.connectVia == "auto")
         }
         if (!missing) searchingSince = System.currentTimeMillis()
         return missing
@@ -448,6 +469,9 @@ class LinkService : LifecycleService() {
         private const val EXTRA_PAIR_URI = "uri"
 
         private const val EXTRA_FOREGROUND = "foreground"
+        private const val ROUTE_WIFI = "wifi"
+        private const val ROUTE_INTERNET = "internet"
+        private const val ROUTE_BT = "bluetooth"
         @Volatile private var instance: LinkService? = null
 
         /** Reconnect every PC now (e.g. it just came into Bluetooth range). False if the service isn't running. */

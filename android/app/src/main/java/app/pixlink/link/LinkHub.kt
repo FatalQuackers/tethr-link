@@ -10,7 +10,10 @@ sealed interface LinkState {
     data object NotPaired : LinkState
     data object Disconnected : LinkState
     data class Connecting(val pcName: String) : LinkState
-    data class Connected(val pcName: String, val viaBluetooth: Boolean = false) : LinkState
+    data class Connected(val pcName: String, val viaBluetooth: Boolean = false, val viaInternet: Boolean = false) : LinkState {
+        /** Not on Wi-Fi: switch back to Wi-Fi as soon as the PC is there. */
+        val remote get() = viaBluetooth || viaInternet
+    }
     data class Error(val message: String) : LinkState
 }
 

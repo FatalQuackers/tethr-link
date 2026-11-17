@@ -164,6 +164,8 @@ public partial class PhoneSession : ObservableObject
         var serverTask = Task.Run(() => server.RunAsync(_cts.Token));
         _bluetooth = new BluetoothLinkServer(server);
         if (_settings.AllowBluetooth) _ = _bluetooth.StartAsync(_cts.Token);
+        if (_settings.RelayKey is null) { _settings.RelayKey = Relay.NewKey(); _settings.Save(); }
+        _ = new Relay(server, () => IsPaired ? _settings.RelayKey : null, () => _settings.AllowInternet).RunAsync(_cts.Token);
         _ = Mirror.RunAsync(_cts.Token);
         _ = Beacon.RunAsync(BeaconPayload, _cts.Token);
         try { _ = Bonjour.StartAsync(_settings.PcId); } catch (Exception ex) { Log.Info($"Bonjour is off: {ex.Message}"); }
@@ -180,7 +182,8 @@ public partial class PhoneSession : ObservableObject
 
     /// <summary>"Wi-Fi" or "Bluetooth": how the phone is connected right now.</summary>
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(StatusText), nameof(OnBluetooth))] private string _connectedVia = "Wi-Fi";
-    public bool OnBluetooth => ConnectedVia == "Bluetooth";
+    /// <summary>On a slower link (Bluetooth or the internet relay): screen sharing needs Wi-Fi.</summary>
+    public bool OnBluetooth => ConnectedVia != "Wi-Fi";
 
     public async Task SetAllowBluetoothAsync(bool on)
     {
@@ -194,6 +197,7 @@ public partial class PhoneSession : ObservableObject
     {
         var bt = _settings.AllowBluetooth ? await BluetoothLinkServer.AddressAsync() : null;
         await SendAsync(Envelope.Of("pc.info", new { bt, bluetooth = _settings.AllowBluetooth && bt is not null, phoneWake = _settings.AllowPhoneWake,
+            relay = _settings.AllowInternet ? _settings.RelayKey : null, relayHost = Relay.Host,
             nearby = _settings.NearbyConnect && IPhoneBt.State != IPhoneBluetooth.LinkState.NotSupported }));
     }
 
@@ -422,7 +426,7 @@ public partial class PhoneSession : ObservableObject
                 if (_settings.PhonePlatform != (IsIPhone ? "ios" : "android")) { _settings.PhonePlatform = IsIPhone ? "ios" : "android"; _settings.Save(); }
                 PowerMode = m.Bool("powerMode") ?? false;
                 CanControl = m.Bool("canControl") ?? PowerMode;
-                ConnectedVia = conn.Via == "bluetooth" ? "Bluetooth" : "Wi-Fi";
+                ConnectedVia = conn.Via switch { "bluetooth" => "Bluetooth", "internet" => "the internet", _ => "Wi-Fi" };
                 _connectedAt = DateTimeOffset.Now;
                 IsConnected = true;
                 Log.Info($"Connected to {PhoneName} over {ConnectedVia}");

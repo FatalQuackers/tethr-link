@@ -112,6 +112,16 @@
             <Border Style="{StaticResource Row}">
                 <Grid ColumnSpacing="16">
                     <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Connect from anywhere" />
+                        <TextBlock Style="{StaticResource Hint}" Text="When Wi-Fi and Bluetooth can't reach this PC (school or work Wi-Fi, your phone on mobile data), your phone connects through the internet instead. Still encrypted end to end: the relay in between can't read anything. Screen sharing needs Wi-Fi." />
+                    </StackPanel>
+                    <ToggleSwitch x:Name="InternetSwitch" Grid.Column="1" OnContent="" OffContent="" MinWidth="0" Toggled="OnInternetToggled" />
+                </Grid>
+            </Border>
+            <Border Style="{StaticResource Row}">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                     <StackPanel Spacing="2">
                         <TextBlock Text="Connect when my phone is nearby" />
                         <TextBlock Style="{StaticResource Hint}" Text="This PC sends a small Bluetooth signal so your phone reconnects as soon as you're in range, instead of waiting to retry. Needs Bluetooth on this PC." />
