@@ -33,7 +33,10 @@ public sealed class Account
 
     private sealed record Session(string AccessToken, string RefreshToken, DateTimeOffset ExpiresAt, string UserId, string? Email);
 
-    public Account() => _session = LoadSession();
+    public Account()
+    {
+        try { _session = LoadSession(); } catch { _session = null; } // never let the optional account stop the app
+    }
 
     // ---------- Sign in ----------
 

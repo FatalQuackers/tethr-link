@@ -32,7 +32,13 @@ public sealed class LinkServer
     public async Task RunAsync(CancellationToken ct)
     {
         _listener = new TcpListener(IPAddress.Any, ControlPort);
-        _listener.Start();
+        try { _listener.Start(); }
+        catch (SocketException ex)
+        {
+            Log.Info($"Couldn't listen for your phone on port {ControlPort}: {ex.Message}. Is another copy of Tethr Link running?");
+            throw;
+        }
+        Log.Info($"Listening for your phone on Wi-Fi at {LocalAddress()}:{ControlPort}");
         while (!ct.IsCancellationRequested)
         {
             var tcp = await _listener.AcceptTcpClientAsync(ct);
@@ -56,7 +62,9 @@ public sealed class LinkServer
             phoneFp = Certificates.Fingerprint(cert);
             var pinned = _pinnedPhone();
             // Paired phone, or any phone while the pairing QR is on screen (token checked next).
-            return string.Equals(phoneFp, pinned, StringComparison.OrdinalIgnoreCase) || _pairingOpen();
+            var ok = string.Equals(phoneFp, pinned, StringComparison.OrdinalIgnoreCase) || _pairingOpen();
+            if (!ok) Log.Info($"Turned away a phone over {via}: it isn't the linked phone (unlink and pair again if you reset or reinstalled the phone app)");
+            return ok;
         });
 
         try
@@ -68,8 +76,9 @@ public sealed class LinkServer
                 EnabledSslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12,
             }, ct);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Log.Info($"A phone reached this PC over {via} but the secure connection failed: {ex.GetBaseException().Message}");
             owner.Dispose();
             return;
         }

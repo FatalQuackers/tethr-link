@@ -166,9 +166,11 @@ public partial class PhoneSession : ObservableObject
         _ = Beacon.RunAsync(BeaconPayload, _cts.Token);
         _ = Bonjour.StartAsync(_settings.PcId);
         StartIPhoneBluetooth();
-        StartAccount();
+        // The account is optional: nothing it does may stop the phone link from starting.
+        try { StartAccount(); } catch (Exception ex) { Log.Info($"Account features are off: {ex.Message}"); }
         try { await server.RunAsync(_cts.Token); }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Server stopped: {ex}"); }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { Log.Info($"The phone link stopped: {ex.Message}"); }
     }
 
     // ---------- Bluetooth ----------
