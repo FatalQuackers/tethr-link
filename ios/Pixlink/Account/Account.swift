@@ -47,10 +47,11 @@ final class Account: NSObject, ObservableObject {
 
     // MARK: Sign in
 
-    func signInWithGoogle() async throws {
+    /// Signs in with "google", "github" or "discord" in a secure browser sheet.
+    func signIn(with provider: String) async throws {
         let v = Self.newVerifier()
         verifier = v
-        let url = URL(string: "\(Self.base)/auth/v1/authorize?provider=google&redirect_to=\(Self.enc(Self.callback))&code_challenge=\(Self.challenge(v))&code_challenge_method=s256")!
+        let url = URL(string: "\(Self.base)/auth/v1/authorize?provider=\(provider)&redirect_to=\(Self.enc(Self.callback))&code_challenge=\(Self.challenge(v))&code_challenge_method=s256")!
         let back: URL = try await withCheckedThrowingContinuation { cont in
             let s = ASWebAuthenticationSession(url: url, callbackURLScheme: "pixlink") { url, error in
                 if let url { cont.resume(returning: url) }

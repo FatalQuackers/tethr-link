@@ -37,9 +37,9 @@ public sealed class Account
 
     // ---------- Sign in ----------
 
-    /// <summary>Opens the browser for Google sign-in and waits for it to come back to this PC.</summary>
-    public Task SignInWithGoogleAsync(CancellationToken ct = default) => BrowserSignInAsync(verifier =>
-        $"{Url}/auth/v1/authorize?provider=google&redirect_to={Uri.EscapeDataString(CallbackUrl)}" +
+    /// <summary>Opens the browser to sign in with "google", "github" or "discord", and waits for it to come back to this PC.</summary>
+    public Task SignInWithProviderAsync(string provider, CancellationToken ct = default) => BrowserSignInAsync(verifier =>
+        $"{Url}/auth/v1/authorize?provider={provider}&redirect_to={Uri.EscapeDataString(CallbackUrl)}" +
         $"&code_challenge={Challenge(verifier)}&code_challenge_method=s256", null, ct);
 
     /// <summary>

@@ -68,12 +68,16 @@ public sealed partial class SettingsPage : Page
 
     private void SetBusy(bool busy)
     {
-        GoogleButton.IsEnabled = EmailButton.IsEnabled = EmailBox.IsEnabled = !busy;
+        ProviderButtons.IsHitTestVisible = !busy;
+        ProviderButtons.Opacity = busy ? 0.5 : 1;
+        EmailButton.IsEnabled = EmailBox.IsEnabled = !busy;
     }
 
-    private async void OnGoogleSignIn(object sender, RoutedEventArgs e)
+    private async void OnProviderSignIn(object sender, RoutedEventArgs e)
     {
-        await RunSignIn("Finish signing in to Google in your browser…", ct => App.Session.Account.SignInWithGoogleAsync(ct));
+        var provider = (string)((FrameworkElement)sender).Tag;
+        var name = provider switch { "github" => "GitHub", "discord" => "Discord", _ => "Google" };
+        await RunSignIn($"Finish signing in with {name} in your browser…", ct => App.Session.Account.SignInWithProviderAsync(provider, ct));
     }
 
     private async void OnEmailSignIn(object sender, RoutedEventArgs e)

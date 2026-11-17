@@ -66,22 +66,12 @@ fun AccountSection() {
                 "Optional. Tethr Link works fully without an account. Signing in lets you add a PC from your account, no QR code needed.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Button(onClick = { Account.signInWithGoogle(ctx) }, enabled = !busy) { Text("Sign in with Google") }
-            OutlinedTextField(
-                typed, { typed = it }, Modifier.fillMaxWidth(), singleLine = true,
-                label = { Text("Or sign in with your email") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            )
-            OutlinedButton(enabled = !busy && typed.contains('@'), onClick = {
-                busy = true
-                scope.launch {
-                    status = try {
-                        Account.sendEmailLink(ctx, typed)
-                        "We emailed a sign-in link to ${typed.trim()}. Open it on this phone to finish."
-                    } catch (e: Account.AccountException) { "Couldn't send the link: ${e.message}" }
-                    busy = false
-                }
-            }) { Text("Email me a link") }
+            Button(onClick = { Account.signInWith(ctx, "google") }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Sign in with Google") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { Account.signInWith(ctx, "discord") }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("Discord") }
+                OutlinedButton(onClick = { Account.signInWith(ctx, "github") }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("GitHub") }
+            }
+            // Email sign-in comes back once Tethr Link has its own email domain (Account.sendEmailLink).
         }
         status?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }

@@ -66,9 +66,10 @@ object Account {
 
     // ---------- Sign in ----------
 
-    fun signInWithGoogle(ctx: Context) {
+    /** Opens the browser to sign in with "google", "github" or "discord". */
+    fun signInWith(ctx: Context, provider: String) {
         val verifier = newVerifier(ctx)
-        val url = "$URL_BASE/auth/v1/authorize?provider=google&redirect_to=${Uri.encode(CALLBACK)}" +
+        val url = "$URL_BASE/auth/v1/authorize?provider=$provider&redirect_to=${Uri.encode(CALLBACK)}" +
             "&code_challenge=${challenge(verifier)}&code_challenge_method=s256"
         ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }

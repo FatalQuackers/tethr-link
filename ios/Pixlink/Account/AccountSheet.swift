@@ -45,20 +45,16 @@ struct AccountSheet: View {
                         Text("Optional. Tethr Link works fully without an account. Signing in lets you add a PC from your account, no QR code needed.")
                             .font(.callout).foregroundStyle(.secondary)
                         Button {
-                            Task { await run { try await account.signInWithGoogle() } }
+                            Task { await run { try await account.signIn(with: "google") } }
                         } label: { Label("Sign in with Google", systemImage: "person.crop.circle") }
+                        Button {
+                            Task { await run { try await account.signIn(with: "discord") } }
+                        } label: { Label("Sign in with Discord", systemImage: "bubble.left.and.bubble.right") }
+                        Button {
+                            Task { await run { try await account.signIn(with: "github") } }
+                        } label: { Label("Sign in with GitHub", systemImage: "chevron.left.forwardslash.chevron.right") }
                     }
-                    Section {
-                        TextField("Your email", text: $typed)
-                            .keyboardType(.emailAddress).textContentType(.emailAddress).textInputAutocapitalization(.never)
-                        Button("Email me a sign-in link") {
-                            Task {
-                                await run { try await account.sendEmailLink(typed) }
-                                if status == nil { status = "We emailed a link to \(typed). Open it on this iPhone to finish." }
-                            }
-                        }
-                        .disabled(!typed.contains("@"))
-                    }
+                    // Email sign-in comes back once Tethr Link has its own email domain (Account.sendEmailLink).
                 }
                 if let status { Section { Text(status).font(.footnote).foregroundStyle(.secondary) } }
             }
