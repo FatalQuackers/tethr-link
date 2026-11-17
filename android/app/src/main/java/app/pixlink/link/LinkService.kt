@@ -151,7 +151,9 @@ class LinkService : LifecycleService() {
                 else -> listOf(false, true)
             }.filter { !it || pc.bt != null }.filter { it || onWifi }
             if (routes.isEmpty()) {
-                LinkHub.lastDisconnectReason[pcId] = "Not on Wi-Fi"
+                LinkHub.lastDisconnectReason[pcId] = if (pc.bt == null)
+                    "Not on Wi-Fi. Bluetooth isn't set up for ${pc.name} yet: connect once on the same Wi-Fi first."
+                else "Not on Wi-Fi"
                 if (LinkHub.states.value[pcId] !is LinkState.Error) LinkHub.setState(pcId, LinkState.Disconnected)
                 wake.receive() // until Wi-Fi comes back
                 backoffMs = 1_000L

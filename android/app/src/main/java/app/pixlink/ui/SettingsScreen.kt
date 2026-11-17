@@ -273,7 +273,7 @@ private fun ConnectViaRow(store: app.pixlink.pairing.PairedStore) {
     androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
         androidx.compose.material3.Text("Connect using", style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
         androidx.compose.material3.Text(
-            "Bluetooth works without shared Wi-Fi, but screen sharing needs Wi-Fi. Pair this phone with your PC in Bluetooth settings first.",
+            "Bluetooth works without shared Wi-Fi (school, work, mobile data), but screen sharing needs Wi-Fi. Pair over Bluetooth once below.",
             style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
             color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -289,6 +289,27 @@ private fun ConnectViaRow(store: app.pixlink.pairing.PairedStore) {
                 )
                 androidx.compose.material3.Text(label)
             }
+        }
+        // Pairing the phone with the PC over Bluetooth makes Bluetooth connections reliable.
+        store.pcs.filter { it.bt != null }.forEach { pc ->
+            val paired = app.pixlink.link.BluetoothTunnel.isPaired(ctx, pc.bt)
+            androidx.compose.material3.OutlinedButton(
+                enabled = !paired,
+                modifier = androidx.compose.ui.Modifier.padding(top = 8.dp),
+                onClick = {
+                    if (!app.pixlink.link.BluetoothTunnel.pair(ctx, pc.bt!!))
+                        android.widget.Toast.makeText(ctx, "Turn on Bluetooth first", android.widget.Toast.LENGTH_SHORT).show()
+                    else android.widget.Toast.makeText(ctx, "Accept the pairing prompt on your phone and on ${pc.name}", android.widget.Toast.LENGTH_LONG).show()
+                },
+            ) { androidx.compose.material3.Text(if (paired) "Paired with ${pc.name} over Bluetooth" else "Pair over Bluetooth with ${pc.name}") }
+        }
+        if (store.pcs.none { it.bt != null }) {
+            androidx.compose.material3.Text(
+                "Bluetooth sets itself up the first time your phone connects to the PC over Wi-Fi.",
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = androidx.compose.ui.Modifier.padding(top = 8.dp),
+            )
         }
     }
 }

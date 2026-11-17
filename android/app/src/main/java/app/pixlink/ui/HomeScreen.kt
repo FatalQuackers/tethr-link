@@ -368,6 +368,18 @@ private fun PcCard(pc: PairedPc, state: LinkState?, onPair: () -> Unit) {
                     Spacer(Modifier.width(6.dp))
                     Text(label, style = MaterialTheme.typography.bodySmall)
                 }
+                // Why it isn't connected, so "Not connected" is never a dead end.
+                if (state !is LinkState.Connected && state !is LinkState.Error) {
+                    app.pixlink.link.LinkHub.lastDisconnectReason[pc.id]?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (pc.bt != null && !app.pixlink.link.BluetoothTunnel.isPaired(ctx, pc.bt)) {
+                        TextButton(onClick = {
+                            if (!app.pixlink.link.BluetoothTunnel.pair(ctx, pc.bt))
+                                android.widget.Toast.makeText(ctx, "Turn on Bluetooth first", android.widget.Toast.LENGTH_SHORT).show()
+                        }, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) { Text("Pair over Bluetooth") }
+                    }
+                }
             }
             if (state is LinkState.Error) {
                 // Usually means the PC unlinked this phone: offer a fresh pairing.
