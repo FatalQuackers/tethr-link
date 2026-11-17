@@ -81,6 +81,8 @@ fun SettingsScreen(onBack: () -> Unit, onChooseApps: () -> Unit) {
         Column(
             Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).padding(bottom = 32.dp),
         ) {
+            Section("Account")
+            app.pixlink.account.AccountSection()
             Section("This phone")
             Column(Modifier.padding(horizontal = 16.dp)) {
                 OutlinedTextField(

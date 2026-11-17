@@ -84,6 +84,13 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="pixlink" android:host="pair" />
             </intent-filter>
+            <!-- Comes back here after signing in to the optional account in the browser -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="pixlink" android:host="auth-callback" />
+            </intent-filter>
         </activity>
 
         <activity

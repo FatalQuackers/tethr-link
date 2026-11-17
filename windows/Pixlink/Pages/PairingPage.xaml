@@ -94,6 +94,8 @@
                     </Grid>
                     <TextBlock TextWrapping="Wrap" Style="{StaticResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                Text="Using an iPhone? Install Tethr Link for iPhone and scan the QR code with it. iPhones get photos, files, clipboard and screen casting." />
+                    <TextBlock TextWrapping="Wrap" Style="{StaticResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="No camera handy? Sign in to an account (optional) in Settings, then tap &quot;Add from my account&quot; on your phone." />
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" Spacing="8">

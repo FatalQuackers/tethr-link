@@ -1,5 +1,7 @@
 package app.pixlink
 
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import android.Manifest
 import android.content.Intent
 import android.os.Bundle
@@ -115,6 +117,17 @@ class MainActivity : ComponentActivity() {
         if (intent?.action == ACTION_SEND_FILES) { intent.action = null; pickFilesToSend(); return }
         val data = intent?.data?.toString() ?: return
         if (data.startsWith("pixlink://pair")) LinkService.pair(this, data)
+        if (data.startsWith(app.pixlink.account.Account.CALLBACK)) {
+            val link = intent.data!!
+            intent.data = null
+            lifecycleScope.launch {
+                val msg = try {
+                    app.pixlink.account.Account.finishSignIn(this@MainActivity, link)
+                    "Signed in to Tethr Link"
+                } catch (e: app.pixlink.account.Account.AccountException) { "Couldn't sign in: ${e.message}" }
+                android.widget.Toast.makeText(this@MainActivity, msg, android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     fun requestCorePermissions() {
@@ -173,6 +186,16 @@ class MainActivity : ComponentActivity() {
                         goLinking(PairingInfo.parse(uri)?.pcName ?: "your PC", "pair")
                     },
                     onEnterCode = { nav.navigate("code") { popUpTo("pair") { inclusive = true } } },
+                    onFromAccount = { nav.navigate("accountpcs") },
+                    onBack = { nav.popBackStack() },
+                )
+            }
+            composable("accountpcs") {
+                app.pixlink.account.AccountPcsScreen(
+                    onPick = { uri, name ->
+                        LinkService.pair(this@MainActivity, uri)
+                        goLinking(name, "accountpcs")
+                    },
                     onBack = { nav.popBackStack() },
                 )
             }

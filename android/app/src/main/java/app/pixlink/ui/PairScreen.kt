@@ -48,7 +48,7 @@ import java.util.concurrent.Executors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PairScreen(onScanned: (String) -> Unit, onEnterCode: () -> Unit, onBack: () -> Unit) {
+fun PairScreen(onScanned: (String) -> Unit, onEnterCode: () -> Unit, onFromAccount: () -> Unit, onBack: () -> Unit) {
     val ctx = LocalContext.current
     var hasCamera by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
@@ -80,6 +80,7 @@ fun PairScreen(onScanned: (String) -> Unit, onEnterCode: () -> Unit, onBack: () 
                     else pasteError = "No pairing link found. On your PC, click Copy link first."
                 }) { Text("Paste pairing link") }
                 Button(onClick = onEnterCode) { Text("Enter 5-digit code instead") }
+                OutlinedButton(onClick = onFromAccount) { Text("Add from my account") }
                 pasteError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             }
         }

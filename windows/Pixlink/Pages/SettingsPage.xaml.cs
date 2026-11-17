@@ -38,7 +38,71 @@ public sealed partial class SettingsPage : Page
         AutoUpdateSwitch.IsOn = S.AutoCheckUpdates;
         FingerprintText.Text = $"This PC's certificate: {App.Session.PcFingerprint}";
         PhoneText.Text = $"Linked to {App.Session.PhoneName}";
+        SyncSwitch.IsOn = S.SyncSettings;
+        ShowAccount();
+        App.Session.Account.Changed += OnAccountChanged;
+        Unloaded += (_, _) => App.Session.Account.Changed -= OnAccountChanged;
         _loading = false;
+    }
+
+    // ---------- Account ----------
+
+    private CancellationTokenSource? _signIn;
+
+    private void OnAccountChanged() => DispatcherQueue.TryEnqueue(ShowAccount);
+
+    private void ShowAccount()
+    {
+        var acct = App.Session.Account;
+        SignedInPanel.Visibility = acct.SignedIn ? Visibility.Visible : Visibility.Collapsed;
+        SignedOutPanel.Visibility = acct.SignedIn ? Visibility.Collapsed : Visibility.Visible;
+        AccountText.Text = $"Signed in as {acct.Email ?? "your account"}";
+        if (acct.SignedIn) SetAccountStatus(null);
+    }
+
+    private void SetAccountStatus(string? text)
+    {
+        AccountStatus.Text = text ?? "";
+        AccountStatus.Visibility = text is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void SetBusy(bool busy)
+    {
+        GoogleButton.IsEnabled = EmailButton.IsEnabled = EmailBox.IsEnabled = !busy;
+    }
+
+    private async void OnGoogleSignIn(object sender, RoutedEventArgs e)
+    {
+        await RunSignIn("Finish signing in to Google in your browser…", ct => App.Session.Account.SignInWithGoogleAsync(ct));
+    }
+
+    private async void OnEmailSignIn(object sender, RoutedEventArgs e)
+    {
+        var email = EmailBox.Text.Trim();
+        if (!email.Contains('@') || !email.Contains('.')) { SetAccountStatus("Type your email address first."); return; }
+        await RunSignIn($"We emailed a sign-in link to {email}. Open it on this PC to finish.", ct => App.Session.Account.SignInWithEmailAsync(email, ct));
+    }
+
+    private async Task RunSignIn(string waiting, Func<CancellationToken, Task> signIn)
+    {
+        _signIn?.Cancel();
+        _signIn = new CancellationTokenSource();
+        SetBusy(true);
+        SetAccountStatus(waiting);
+        try { await signIn(_signIn.Token); }
+        catch (OperationCanceledException) { SetAccountStatus("Sign-in timed out. Try again."); }
+        catch (System.Net.HttpListenerException) { SetAccountStatus("Another app is using the sign-in port (47199). Close it and try again."); }
+        catch (Exception ex) { SetAccountStatus($"Couldn't sign in: {ex.Message}"); }
+        finally { SetBusy(false); }
+    }
+
+    private async void OnSignOut(object sender, RoutedEventArgs e) => await App.Session.SignOutAsync();
+
+    private void OnSyncToggled(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        S.SyncSettings = SyncSwitch.IsOn;
+        S.Save();
     }
 
     private void Save() { if (!_loading) S.Save(); }

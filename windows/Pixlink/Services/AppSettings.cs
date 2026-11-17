@@ -59,6 +59,12 @@ public sealed class AppSettings
     public bool AutoClipboard { get; set; } = true;
     public bool CopyCodes { get; set; } = true;
 
+    // Account (optional)
+    /// <summary>Lets a phone signed in to the same account add this PC without a QR code. Changes after each use.</summary>
+    public string? AccountPairToken { get; set; }
+    /// <summary>Sync these settings through the account.</summary>
+    public bool SyncSettings { get; set; } = true;
+
     // App
     public string Theme { get; set; } = "System";
     public bool AutoCheckUpdates { get; set; } = true;
@@ -89,9 +95,13 @@ public sealed class AppSettings
         return s;
     }
 
+    /// <summary>Raised after every save (account settings sync listens).</summary>
+    public static event Action? Saved;
+
     public void Save()
     {
         Directory.CreateDirectory(Folder);
         File.WriteAllText(FilePath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+        Saved?.Invoke();
     }
 }

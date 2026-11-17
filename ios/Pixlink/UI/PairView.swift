@@ -5,6 +5,7 @@ struct PairView: View {
     @ObservedObject private var pending = PendingPairing.shared
     @State private var scanning = false
     @State private var pasting = false
+    @State private var fromAccount = false
     @State private var pastedText = ""
     @State private var working = false
     @State private var error: String?
@@ -56,6 +57,10 @@ struct PairView: View {
                     .controlSize(.large)
                     .disabled(working)
 
+                    Button("Add from my account") { fromAccount = true }
+                        .font(.subheadline)
+                        .disabled(working)
+
                     Button("Paste the pairing link instead") { pasting = true }
                         .font(.subheadline)
                         .disabled(working)
@@ -72,6 +77,9 @@ struct PairView: View {
                 scanning = false
                 if let info = PairingInfo(code) { start(info) } else { error = "That isn't a Tethr Link code. Scan the QR code on Tethr Link's pairing screen on your PC." }
             }
+        }
+        .sheet(isPresented: $fromAccount) {
+            AccountSheet { info in start(info) }
         }
         .alert("Paste pairing link", isPresented: $pasting) {
             TextField("pixlink://pair?…", text: $pastedText)

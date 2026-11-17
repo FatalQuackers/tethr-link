@@ -24,6 +24,7 @@ public sealed partial class MainWindow : Window
         PairingFrame.Navigate(typeof(PairingPage));
 
         ApplyTheme();
+        Session.SettingsSynced += () => DispatcherQueue.TryEnqueue(ApplyTheme);
         _ = CheckForUpdatesAsync();
         Session.JustPaired += () => DispatcherQueue.TryEnqueue(() =>
         {

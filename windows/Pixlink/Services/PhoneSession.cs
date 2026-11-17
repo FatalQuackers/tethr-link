@@ -158,7 +158,7 @@ public partial class PhoneSession : ObservableObject
         StartClipboardSync();
         Log.Info("Tethr Link started" + (AppSettings.IsPortable ? " (portable)" : ""));
 
-        var server = new LinkServer(_cert, () => _settings.PhoneFingerprint, () => PairingOpen);
+        var server = new LinkServer(_cert, () => _settings.PhoneFingerprint, () => PairingOpen || AccountPairingOpen);
         server.Connected += OnConnected;
         _bluetooth = new BluetoothLinkServer(server);
         if (_settings.AllowBluetooth) _ = _bluetooth.StartAsync(_cts.Token);
@@ -166,6 +166,7 @@ public partial class PhoneSession : ObservableObject
         _ = Beacon.RunAsync(BeaconPayload, _cts.Token);
         _ = Bonjour.StartAsync(_settings.PcId);
         StartIPhoneBluetooth();
+        StartAccount();
         try { await server.RunAsync(_cts.Token); }
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Server stopped: {ex}"); }
     }
@@ -213,6 +214,140 @@ public partial class PhoneSession : ObservableObject
     }
 
     public bool PairingOpen => _pairToken is not null && DateTimeOffset.Now < _pairExpires;
+
+    // ---------- Optional account ----------
+
+    /// <summary>The optional Tethr Link account (add a phone without a QR code, settings sync).</summary>
+    public Account Account { get; } = new();
+
+    /// <summary>A phone signed in to the same account may pair with the account token (it can't read it otherwise).</summary>
+    public bool AccountPairingOpen => Account.SignedIn && _settings.AccountPairToken is not null;
+
+    private System.Threading.Timer? _settingsPush;
+    private bool _applyingCloudSettings;
+
+    private void StartAccount()
+    {
+        Account.Changed += () => _ui.TryEnqueue(OnAccountChanged);
+        AppSettings.Saved += () =>
+        {
+            if (_applyingCloudSettings || !Account.SignedIn || !_settings.SyncSettings) return;
+            // Many settings change together (a slider, several toggles): send once, a few seconds later.
+            _settingsPush?.Dispose();
+            _settingsPush = new System.Threading.Timer(_ => _ = PushSettingsAsync(), null, 4000, Timeout.Infinite);
+        };
+        if (Account.SignedIn) _ = PublishToAccountAsync();
+        // New Wi-Fi, new address: keep the account copy current so the phone finds this PC.
+        System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += (_, _) =>
+        {
+            if (!Account.SignedIn) return;
+            _addressPush?.Dispose();
+            _addressPush = new System.Threading.Timer(_ => _ = PublishToAccountAsync(), null, 5000, Timeout.Infinite);
+        };
+    }
+    private System.Threading.Timer? _addressPush;
+
+    private bool _wasSignedIn;
+    private async void OnAccountChanged()
+    {
+        if (Account.SignedIn && !_wasSignedIn)
+        {
+            _wasSignedIn = true;
+            await PullSettingsAsync();
+            await PublishToAccountAsync();
+        }
+        else if (!Account.SignedIn) _wasSignedIn = false;
+    }
+
+    /// <summary>Puts this PC (address, certificate and a fresh pairing token) in the account.</summary>
+    public async Task PublishToAccountAsync(bool newToken = false)
+    {
+        if (!Account.SignedIn) return;
+        _wasSignedIn = true;
+        if (newToken || _settings.AccountPairToken is null)
+        {
+            _settings.AccountPairToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(24)).Replace('+', '-').Replace('/', '_');
+            _settings.Save();
+        }
+        try
+        {
+            await Account.PublishPcAsync(_settings.PcId, PcName, PcFingerprint, LinkServer.LocalAddress(), LinkServer.ControlPort, _settings.AccountPairToken!);
+        }
+        catch (Exception ex) { Log.Info($"Couldn't update your account: {ex.Message}"); }
+    }
+
+    /// <summary>Signing out takes this PC out of the account first.</summary>
+    public async Task SignOutAsync()
+    {
+        try { await Account.RemovePcAsync(_settings.PcId); } catch { /* offline */ }
+        _settings.AccountPairToken = null;
+        _settings.Save();
+        await Account.SignOutAsync();
+    }
+
+    /// <summary>Settings that make sense on every PC (not this PC's name, paired phone or folders).</summary>
+    private System.Text.Json.Nodes.JsonObject SyncedSettings() => new()
+    {
+        ["theme"] = _settings.Theme,
+        ["showToasts"] = _settings.ShowToasts,
+        ["toastShowContent"] = _settings.ToastShowContent,
+        ["toastSound"] = _settings.ToastSound,
+        ["mutedApps"] = new System.Text.Json.Nodes.JsonArray(_settings.MutedApps.Select(a => (System.Text.Json.Nodes.JsonNode?)a).ToArray()),
+        ["quickActions"] = new System.Text.Json.Nodes.JsonArray(_settings.QuickActions.Select(a => (System.Text.Json.Nodes.JsonNode?)a).ToArray()),
+        ["groupByApp"] = _settings.GroupNotificationsByApp,
+        ["lowBatteryAlert"] = _settings.LowBatteryAlert,
+        ["lowBatteryLevel"] = _settings.LowBatteryLevel,
+        ["mirrorMaxSize"] = _settings.MirrorMaxSize,
+        ["mirrorFps"] = _settings.MirrorFps,
+        ["mirrorBitrate"] = _settings.MirrorBitrateMbps,
+        ["autoClipboard"] = _settings.AutoClipboard,
+        ["copyCodes"] = _settings.CopyCodes,
+        ["nearbyConnect"] = _settings.NearbyConnect,
+    };
+
+    private async Task PushSettingsAsync()
+    {
+        try { await Account.SaveSettingsAsync(SyncedSettings()); }
+        catch (Exception ex) { Log.Info($"Couldn't sync settings: {ex.Message}"); }
+    }
+
+    private async Task PullSettingsAsync()
+    {
+        if (!_settings.SyncSettings) return;
+        try
+        {
+            var d = await Account.LoadSettingsAsync();
+            if (d is null) { await PushSettingsAsync(); return; } // first PC in this account: it sets the defaults
+            _applyingCloudSettings = true;
+            string? Str(string k) => d[k]?.GetValueKind() == System.Text.Json.JsonValueKind.String ? (string?)d[k] : null;
+            bool? Bool(string k) => d[k]?.GetValueKind() is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False ? (bool?)d[k] : null;
+            int? Int(string k) => d[k]?.GetValueKind() == System.Text.Json.JsonValueKind.Number ? (int?)d[k] : null;
+            List<string>? List(string k) => (d[k] as System.Text.Json.Nodes.JsonArray)?.Select(x => (string?)x).OfType<string>().ToList();
+            _settings.Theme = Str("theme") ?? _settings.Theme;
+            _settings.ShowToasts = Bool("showToasts") ?? _settings.ShowToasts;
+            _settings.ToastShowContent = Bool("toastShowContent") ?? _settings.ToastShowContent;
+            _settings.ToastSound = Bool("toastSound") ?? _settings.ToastSound;
+            if (List("mutedApps") is { } muted) _settings.MutedApps = muted.ToHashSet();
+            if (List("quickActions") is { Count: > 0 } qa) _settings.QuickActions = qa;
+            _settings.GroupNotificationsByApp = Bool("groupByApp") ?? _settings.GroupNotificationsByApp;
+            _settings.LowBatteryAlert = Bool("lowBatteryAlert") ?? _settings.LowBatteryAlert;
+            _settings.LowBatteryLevel = Int("lowBatteryLevel") ?? _settings.LowBatteryLevel;
+            _settings.MirrorMaxSize = Int("mirrorMaxSize") ?? _settings.MirrorMaxSize;
+            _settings.MirrorFps = Int("mirrorFps") ?? _settings.MirrorFps;
+            _settings.MirrorBitrateMbps = Int("mirrorBitrate") ?? _settings.MirrorBitrateMbps;
+            _settings.AutoClipboard = Bool("autoClipboard") ?? _settings.AutoClipboard;
+            _settings.CopyCodes = Bool("copyCodes") ?? _settings.CopyCodes;
+            _settings.NearbyConnect = Bool("nearbyConnect") ?? _settings.NearbyConnect;
+            _settings.Save();
+            RebuildQuickActions();
+            SettingsSynced?.Invoke();
+        }
+        catch (Exception ex) { Log.Info($"Couldn't load synced settings: {ex.Message}"); }
+        finally { _applyingCloudSettings = false; }
+    }
+
+    /// <summary>Raised after settings arrive from the account (the window re-applies the theme).</summary>
+    public event Action? SettingsSynced;
 
     /// <summary>The name phones see for this PC.</summary>
     public string PcName => string.IsNullOrWhiteSpace(_settings.PcDisplayName) ? Environment.MachineName : _settings.PcDisplayName!;
@@ -341,12 +476,14 @@ public partial class PhoneSession : ObservableObject
     private void HandlePairRequest(PhoneConnection conn, Envelope m)
     {
         var token = m.Str("token");
-        if (!PairingOpen)
+        var viaAccount = AccountPairingOpen && token is { Length: > 20 } && CryptographicOperations.FixedTimeEquals(
+            System.Text.Encoding.UTF8.GetBytes(token), System.Text.Encoding.UTF8.GetBytes(_settings.AccountPairToken!));
+        if (!PairingOpen && !viaAccount)
         {
             _ = conn.SendAsync(Envelope.Of("pair.reject", new { reason = "The code expired. Show a new one on your PC." }));
             return;
         }
-        var ok = token == _pairToken || (token is { Length: 5 } && token == PairingCode);
+        var ok = viaAccount || token == _pairToken || (token is { Length: 5 } && token == PairingCode);
         if (!ok)
         {
             // 5 wrong codes and the code changes, so guessing all 100,000 isn't practical.
@@ -357,6 +494,7 @@ public partial class PhoneSession : ObservableObject
         _pairToken = null;
         PairingUri = null;
         PairingCode = null;
+        if (viaAccount) _ = PublishToAccountAsync(newToken: true); // each account token works once
         _settings.PhoneName = m.Str("phoneName");
         _settings.PhonePlatform = m.Str("platform") ?? "android";
         if (m.Bool("needsIdentity") == true || string.IsNullOrEmpty(conn.PhoneFingerprint))

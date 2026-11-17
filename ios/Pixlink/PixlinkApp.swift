@@ -19,7 +19,11 @@ struct PixlinkApp: App {
                 .environmentObject(bluetooth)
                 .tint(.pixBlue)
                 // Scanning the PC's QR code with the iPhone camera opens Pixlink straight into pairing.
-                .onOpenURL { url in PendingPairing.shared.info = PairingInfo(url.absoluteString) }
+                .onOpenURL { url in
+                    // An emailed sign-in link for the optional account.
+                    if url.host == "auth-callback" { Task { try? await Account.shared.finish(url) }; return }
+                    PendingPairing.shared.info = PairingInfo(url.absoluteString)
+                }
         }
         .onChange(of: phase) { newPhase in
             if newPhase == .active { link.resume() }
