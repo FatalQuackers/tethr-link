@@ -34,6 +34,9 @@ jobs:
         working-directory: android
     steps:
       - uses: actions/checkout@v4
+      - name: Clean up the version (someone may type V1.0.3, v.1.0.3 or " v1.0.3")
+        shell: bash
+        run: echo "VERSION=v$(echo "$VERSION" | tr -cd '0-9.' | sed 's/^\.*//; s/\.*$//')" >> "$GITHUB_ENV"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -68,6 +71,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Clean up the version (someone may type V1.0.3, v.1.0.3 or " v1.0.3")
+        shell: bash
+        run: echo "VERSION=v$(echo "$VERSION" | tr -cd '0-9.' | sed 's/^\.*//; s/\.*$//')" >> "$GITHUB_ENV"
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
@@ -122,6 +128,9 @@ jobs:
         working-directory: ios
     steps:
       - uses: actions/checkout@v4
+      - name: Clean up the version (someone may type V1.0.3, v.1.0.3 or " v1.0.3")
+        shell: bash
+        run: echo "VERSION=v$(echo "$VERSION" | tr -cd '0-9.' | sed 's/^\.*//; s/\.*$//')" >> "$GITHUB_ENV"
       - name: Generate the Xcode project
         run: |
           # What's new screen: ship this version's notes inside the app.
@@ -158,7 +167,7 @@ jobs:
       # A rebuild's tag, normalized (someone may type V1.0.3).
       - run: |
           IN="${{ inputs.tag || github.ref_name }}"
-          echo "TAG=v${IN#[vV]}" >> "$GITHUB_ENV"
+          echo "TAG=v$(echo "$IN" | tr -cd '0-9.' | sed 's/^\.*//; s/\.*$//')" >> "$GITHUB_ENV"
       - name: Move the tag to this build (rebuilds only)
         if: inputs.tag
         uses: actions/checkout@v4
