@@ -291,7 +291,7 @@ public sealed partial class MainWindow : Window
     {
         if (_updateTimer is null)
         {
-            _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromHours(6) };
+            _updateTimer = new DispatcherTimer { Interval = Session.Settings.DevCode is null ? TimeSpan.FromHours(6) : TimeSpan.FromMinutes(20) };
             _updateTimer.Tick += (_, _) => { if (Session.Settings.AutoCheckUpdates) _ = CheckForUpdatesAsync(); };
             _updateTimer.Start();
         }
@@ -301,7 +301,8 @@ public sealed partial class MainWindow : Window
             _update = await Updater.CheckAsync();
             if (_update is null) return;
             // Test builds (version 0.0.x from the test page) never replace themselves on their own.
-            if (Session.Settings.AutoCheckUpdates && Updater.Current.Major > 0) await InstallWhenIdleAsync(_update);
+            // Test builds never replace themselves with a release on their own; developer builds keep updating.
+            if (Session.Settings.AutoCheckUpdates && (Updater.Current.Major > 0 || Session.Settings.DevCode is not null)) await InstallWhenIdleAsync(_update);
             else ShowUpdate(_update);
         }
         catch (Exception ex) when (quiet) { Crash.Log(ex, "Update check"); }

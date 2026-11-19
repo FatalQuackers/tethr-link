@@ -46,8 +46,33 @@ public static class Updater
     /// <summary>Early updates: also take pre-releases, which everyone else gets a day later.</summary>
     public static bool Early => App.Session.Settings.EarlyUpdates;
 
+    private const string Site = "https://fatalquackers.github.io/tethr-link/test/";
+
+    /// <summary>The newest developer build number for a code, or null if the code is wrong (or offline).</summary>
+    public static async Task<int?> DevBuildAsync(string code)
+    {
+        try
+        {
+            var json = JsonNode.Parse(await Http.GetStringAsync($"{Site}{Uri.EscapeDataString(code)}/build.json?t={DateTime.UtcNow.Ticks}"))!.AsObject();
+            return json["build"]?.GetValue<int>();
+        }
+        catch { return null; }
+    }
+
+    /// <summary>Developer builds: every CI build, newest first, compared by build number.</summary>
+    private static async Task<Update?> CheckDevAsync(string code)
+    {
+        var json = JsonNode.Parse(await Http.GetStringAsync($"{Site}{Uri.EscapeDataString(code)}/build.json?t={DateTime.UtcNow.Ticks}"))!.AsObject();
+        var build = json["build"]?.GetValue<int>() ?? 0;
+        if (build <= CurrentBuild) return null;
+        var message = json["message"]?.GetValue<string>() ?? "";
+        return new Update(new Version(0, 0, build), $"{Site}{code}/TethrLink-windows-x64.zip", $"{Site}{code}/",
+            $"Developer build {build}\n{message}", json["date"] is { } d ? DateTimeOffset.Parse(d.GetValue<string>()) : null, IsEarly: true);
+    }
+
     public static async Task<Update?> CheckAsync()
     {
+        if (App.Session.Settings.DevCode is { } dev) return await CheckDevAsync(dev);
         JsonObject json;
         if (Early)
         {

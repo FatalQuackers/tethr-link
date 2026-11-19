@@ -45,6 +45,8 @@ public sealed class AppSettings
     // Updates
     /// <summary>Get each update a day early (GitHub pre-releases).</summary>
     public bool EarlyUpdates { get; set; }
+    /// <summary>Developer code (the test page's secret): get every new build straight away.</summary>
+    public string? DevCode { get; set; }
 
     // Connections
     public bool AllowBluetooth { get; set; } = true;

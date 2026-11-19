@@ -269,6 +269,14 @@ jobs:
           [ -d dist/pixlink-ios ] && cp dist/pixlink-ios/*.ipa "$out/TethrLink-iOS.ipa"
           [ -d dist/pixlink-windows-setup ] && cp dist/pixlink-windows-setup/*.exe "$out/TethrLink-Setup-x64.exe"
           [ -d dist/pixlink-android ] && cp dist/pixlink-android/*.apk "$out/TethrLink-android.apk"
+          [ -d dist/pixlink-windows-x64 ] && (cd dist/pixlink-windows-x64 && zip -qr "$GITHUB_WORKSPACE/$out/TethrLink-windows-x64.zip" .)
+          # Apps with the developer code check this file and update themselves to the newest build.
+          python3 - "$out/build.json" <<'PY'
+          import json, os, subprocess, sys, datetime
+          msg = subprocess.run(["git", "log", "-1", "--format=%s"], capture_output=True, text=True).stdout.strip()
+          json.dump({"build": int(os.environ["GITHUB_RUN_NUMBER"]), "commit": os.environ["GITHUB_SHA"][:7],
+                     "date": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"), "message": msg}, open(sys.argv[1], "w"))
+          PY
           sed -e "s/{{BUILD}}/${{ github.run_number }}/g" -e "s/{{DATE}}/$(date -u '+%-d %b %Y %H:%M UTC')/g" \
               -e "s/{{COMMIT}}/${GITHUB_SHA::7}/g" .github/test-page.html > "$out/index.html"
       - uses: actions/upload-pages-artifact@v3

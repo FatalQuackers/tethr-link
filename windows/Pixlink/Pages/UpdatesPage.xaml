@@ -93,6 +93,28 @@
                 </Grid>
             </Border>
 
+            <!-- Developer builds: unlocked with the developer code (the test page's secret part) -->
+            <Border Style="{StaticResource PanelCardStyle}" Padding="16,12">
+                <StackPanel Spacing="10">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="Developer builds" />
+                            <Border CornerRadius="8" Padding="6,1" Background="{ThemeResource SystemFillColorAttentionBackgroundBrush}">
+                                <TextBlock Text="Developers" Style="{StaticResource CaptionTextBlockStyle}" />
+                            </Border>
+                        </StackPanel>
+                        <TextBlock x:Name="DevHint" Style="{StaticResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"
+                                   Text="Have a developer code? Get every new build as soon as it's made, before it's released. They update themselves, but may be broken." />
+                    </StackPanel>
+                    <Grid ColumnSpacing="8" x:Name="DevEntry">
+                        <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <PasswordBox x:Name="DevCodeBox" PlaceholderText="Developer code" />
+                        <Button Grid.Column="1" Content="Turn on" Click="OnDevOn" />
+                    </Grid>
+                    <Button x:Name="DevOffButton" Content="Turn off developer builds" Click="OnDevOff" Visibility="Collapsed" />
+                </StackPanel>
+            </Border>
+
             <!-- What's new -->
             <TextBlock Text="What's new" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,8,0,0" />
             <ProgressRing x:Name="NotesLoading" IsActive="True" HorizontalAlignment="Left" />

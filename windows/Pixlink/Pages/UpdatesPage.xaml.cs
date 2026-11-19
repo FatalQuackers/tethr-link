@@ -17,7 +17,46 @@ public sealed partial class UpdatesPage : Page
         InitializeComponent();
         AutoSwitch.IsOn = App.Session.Settings.AutoCheckUpdates;
         EarlySwitch.IsOn = App.Session.Settings.EarlyUpdates;
+        ShowDev();
         _ready = true;
+    }
+
+    // ---------- Developer builds ----------
+
+    private void ShowDev()
+    {
+        var on = App.Session.Settings.DevCode is not null;
+        DevEntry.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+        DevOffButton.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        if (on) DevHint.Text = $"On. This PC gets every new build as soon as it's made (you're on build {Updater.CurrentBuild}). To go back to normal versions, turn this off: you'll move to the next release when it comes out.";
+    }
+
+    private async void OnDevOn(object sender, RoutedEventArgs e)
+    {
+        var code = DevCodeBox.Password.Trim();
+        if (code.Length == 0) return;
+        DevHint.Text = "Checking the code…";
+        var build = await Updater.DevBuildAsync(code);
+        if (build is null)
+        {
+            DevHint.Text = "That code didn't work. Check it and try again.";
+            return;
+        }
+        App.Session.Settings.DevCode = code;
+        App.Session.Settings.Save();
+        DevCodeBox.Password = "";
+        ShowDev();
+        _ = CheckAsync();
+    }
+
+    private void OnDevOff(object sender, RoutedEventArgs e)
+    {
+        App.Session.Settings.DevCode = null;
+        App.Session.Settings.Save();
+        DevHint.Text = "Off. You'll get normal versions again from the next release.";
+        DevEntry.Visibility = Visibility.Visible;
+        DevOffButton.Visibility = Visibility.Collapsed;
+        _ = CheckAsync();
     }
 
     private bool _ready;

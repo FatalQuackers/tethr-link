@@ -112,6 +112,13 @@ class PairedStore(context: Context) {
     }
 
     /** Get each update a day early (pre-releases). */
+    var devCode: String?
+        get() = prefs.getString("devCode", null)
+        set(v) {
+            prefs.edit { putString("devCode", v) }
+            app.pixlink.update.UpdateChecker.devCode = v
+        }
+
     var earlyUpdates: Boolean
         get() = prefs.getBoolean("earlyUpdates", false)
         set(v) {

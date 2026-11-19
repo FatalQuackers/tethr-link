@@ -31,6 +31,19 @@ object UpdateChecker {
     /** Early updates: also take pre-releases, which everyone else gets a day later. */
     @Volatile var early: Boolean = false
 
+    /** Developer code (the test page's secret): take every new build straight away. */
+    @Volatile var devCode: String? = null
+
+    private const val SITE = "https://fatalquackers.github.io/tethr-link/test/"
+
+    /** The newest developer build for a code, or null if the code is wrong (or offline). */
+    suspend fun devBuild(code: String): Int? = withContext(Dispatchers.IO) {
+        runCatching {
+            Codec.parseToJsonElement(get("$SITE${android.net.Uri.encode(code)}/build.json?t=${System.currentTimeMillis()}"))
+                .jsonObject["build"]?.jsonPrimitive?.content?.toIntOrNull()
+        }.getOrNull()
+    }
+
     private fun get(url: String): String {
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.setRequestProperty("Accept", "application/vnd.github+json")
@@ -41,6 +54,14 @@ object UpdateChecker {
 
     /** Returns the newer release, or null if this is the latest. Throws on network errors. */
     suspend fun check(): Update? = withContext(Dispatchers.IO) {
+        devCode?.let { code ->
+            // Developer builds: compared by build number (every CI build has a higher one).
+            val build = devBuild(code) ?: throw java.io.IOException("Couldn't check developer builds")
+            val update = if (build > BuildConfig.VERSION_CODE)
+                Update("build $build", "$SITE$code/TethrLink-android.apk", "$SITE$code/") else null
+            _available.value = update
+            return@withContext update
+        }
         val json = if (early) {
             // The newest release of any kind (pre-releases included) that has an APK attached.
             Codec.parseToJsonElement(get("https://api.github.com/repos/FatalQuackers/tethr-link/releases?per_page=10")).jsonArray

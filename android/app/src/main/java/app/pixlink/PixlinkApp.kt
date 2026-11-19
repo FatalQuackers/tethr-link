@@ -14,6 +14,7 @@ class PixlinkApp : Application() {
         createChannels()
         PowerMode.init(this)
         app.pixlink.update.UpdateChecker.early = app.pixlink.pairing.PairedStore(this).earlyUpdates
+        app.pixlink.update.UpdateChecker.devCode = app.pixlink.pairing.PairedStore(this).devCode
     }
 
     private fun createChannels() {

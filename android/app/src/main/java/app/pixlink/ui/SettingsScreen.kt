@@ -178,8 +178,9 @@ fun SettingsScreen(onBack: () -> Unit, onChooseApps: () -> Unit) {
                 "New versions arrive a day before everyone else. They're tested less, so there may be bugs.",
                 early,
             ) { early = it; store.earlyUpdates = it }
+            DeveloperBuilds(store)
             ListItem(
-                headlineContent = { Text("Tethr Link ${UpdateChecker.currentVersion}") },
+                headlineContent = { Text("Tethr Link ${UpdateChecker.currentVersion} (build ${app.pixlink.BuildConfig.VERSION_CODE})") },
                 supportingContent = { Text(updateStatus ?: "Tethr Link checks for updates when you open it.") },
                 trailingContent = {
                     OutlinedButton(enabled = !checking, onClick = {
@@ -311,5 +312,48 @@ private fun ConnectViaRow(store: app.pixlink.pairing.PairedStore) {
                 modifier = androidx.compose.ui.Modifier.padding(top = 8.dp),
             )
         }
+    }
+}
+
+
+/** Developer builds: with the developer code, the app updates itself to every new build. */
+@Composable
+private fun DeveloperBuilds(store: app.pixlink.pairing.PairedStore) {
+    val scope = rememberCoroutineScope()
+    var code by remember { mutableStateOf(store.devCode) }
+    var typed by remember { mutableStateOf("") }
+    var status by remember { mutableStateOf<String?>(null) }
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Developer builds", style = MaterialTheme.typography.bodyLarge)
+        if (code != null) {
+            Text(
+                "On. This phone gets every new build as soon as it's made. Turn it off to go back to normal versions from the next release.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedButton(onClick = { store.devCode = null; code = null; status = null }) { Text("Turn off developer builds") }
+        } else {
+            Text(
+                "Have a developer code? Get every new build before it's released. They may be broken.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            androidx.compose.material3.OutlinedTextField(
+                typed, { typed = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Developer code") },
+                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+            )
+            OutlinedButton(enabled = typed.isNotBlank(), onClick = {
+                val c = typed.trim()
+                status = "Checking the code…"
+                scope.launch {
+                    if (UpdateChecker.devBuild(c) == null) status = "That code didn't work. Check it and try again."
+                    else {
+                        store.devCode = c; code = c; typed = ""
+                        status = runCatching { UpdateChecker.check() }.getOrNull()
+                            ?.let { "Build ${it.version.removePrefix("build ")} is ready. It installs from the home screen." }
+                            ?: "You're on the newest build."
+                    }
+                }
+            }) { Text("Turn on") }
+        }
+        status?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }
