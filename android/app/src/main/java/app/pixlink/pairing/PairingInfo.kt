@@ -12,6 +12,9 @@ data class PairingInfo(
     val token: String,
     val fingerprint: String,
     val pcName: String,
+    /** The PC's relay room secret and relay address: lets this phone pair (and connect) over the internet. */
+    val relay: String? = null,
+    val relayHost: String? = null,
 ) {
     companion object {
         fun parse(text: String): PairingInfo? {
@@ -24,6 +27,8 @@ data class PairingInfo(
                 token = uri.getQueryParameter("token") ?: return null,
                 fingerprint = uri.getQueryParameter("fp")?.removePrefix("SHA256:")?.uppercase() ?: return null,
                 pcName = uri.getQueryParameter("name") ?: "PC",
+                relay = uri.getQueryParameter("relay"),
+                relayHost = uri.getQueryParameter("relayHost"),
             )
         }
     }

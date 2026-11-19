@@ -43,7 +43,7 @@ public sealed class Relay
             var key = _key();
             if (key is null || !_enabled() || Host.Contains("RELAY_SUBDOMAIN"))
             {
-                await Task.Delay(TimeSpan.FromSeconds(30), ct);
+                await Task.Delay(TimeSpan.FromSeconds(3), ct); // quick: the pairing QR may open any moment
                 continue;
             }
             var ws = new ClientWebSocket();

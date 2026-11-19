@@ -165,7 +165,7 @@ public partial class PhoneSession : ObservableObject
         _bluetooth = new BluetoothLinkServer(server);
         if (_settings.AllowBluetooth) _ = _bluetooth.StartAsync(_cts.Token);
         if (_settings.RelayKey is null) { _settings.RelayKey = Relay.NewKey(); _settings.Save(); }
-        _ = new Relay(server, () => IsPaired ? _settings.RelayKey : null, () => _settings.AllowInternet).RunAsync(_cts.Token);
+        _ = new Relay(server, () => IsPaired || PairingOpen ? _settings.RelayKey : null, () => _settings.AllowInternet).RunAsync(_cts.Token);
         _ = Mirror.RunAsync(_cts.Token);
         _ = Beacon.RunAsync(BeaconPayload, _cts.Token);
         try { _ = Bonjour.StartAsync(_settings.PcId); } catch (Exception ex) { Log.Info($"Bonjour is off: {ex.Message}"); }
@@ -217,6 +217,9 @@ public partial class PhoneSession : ObservableObject
         PairingCode = RandomNumberGenerator.GetInt32(0, 100_000).ToString("D5");
         var uri = $"pixlink://pair?v=1&host={LinkServer.LocalAddress()}&port={LinkServer.ControlPort}" +
                   $"&token={_pairToken}&fp=SHA256:{PcFingerprint}&name={Uri.EscapeDataString(PcName)}";
+        // Lets the phone pair through the internet relay when it can't reach this PC on Wi-Fi.
+        if (_settings.AllowInternet && _settings.RelayKey is not null)
+            uri += $"&relay={_settings.RelayKey}&relayHost={Relay.Host}";
         PairingUri = uri;
         return uri;
     }

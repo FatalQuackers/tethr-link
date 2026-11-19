@@ -255,45 +255,64 @@ class LinkService : LifecycleService() {
         pairJob?.cancel()
         LinkHub.setPairing(LinkState.Connecting(info.pcName))
         pairJob = lifecycleScope.launch(Dispatchers.IO) {
-            lateinit var client: LinkClient
             var paired: PairedPc? = null
-            client = LinkClient(
-                info.host, info.port, info.fingerprint,
-                onConnected = { c ->
-                    c.send(msg(MessageTypes.PAIR_REQUEST) {
-                        put("token", info.token)
-                        put("phoneName", store.displayName)
-                        put("model", Build.MODEL)
-                        put("androidVersion", Build.VERSION.RELEASE)
-                        put("phoneFingerprint", Identity.fingerprint)
-                    })
-                },
-                onMessage = MessageRouter(
-                    this@LinkService, store, pcId = null, out = { client.send(it) },
-                    onPaired = { name, id ->
-                        val pc = PairedPc(info.host, info.port, info.fingerprint, name, id.ifEmpty { info.fingerprint })
-                        store.add(pc)
-                        paired = pc
-                        LinkHub.setPairing(LinkState.Connected(name))
-                        client.close() // the normal connection takes over
-                    },
-                    onRejected = { reason ->
-                        LinkHub.setPairing(LinkState.Error(reason))
-                        client.close()
-                    },
-                )::handle,
-            )
-            try {
-                client.run()
-            } catch (e: Exception) {
-                if (paired == null && LinkHub.pairing.value !is LinkState.Error) {
-                    LinkHub.setPairing(LinkState.Error(describe(e, info.pcName, info.host, info.port)))
-                }
-            } finally {
-                client.close()
+            var rejected = false
+            var lastError: String? = null
+            // Same Wi-Fi first; then through the internet relay (school/work Wi-Fi, mobile data).
+            val routes = buildList {
+                if (onWifi || info.relay == null) add(ROUTE_WIFI)
+                if (info.relay != null && info.relayHost != null) add(ROUTE_INTERNET)
             }
-            if (paired == null && LinkHub.pairing.value is LinkState.Connecting) {
-                LinkHub.setPairing(LinkState.Error("${info.pcName} closed the connection. Show a new code and try again."))
+            for (route in routes) {
+                var relay: RelayTunnel? = null
+                val (host, port) = if (route == ROUTE_INTERNET) {
+                    relay = try { RelayTunnel.open(info.relayHost!!, info.relay!!) } catch (e: Exception) {
+                        lastError = "Internet: ${e.message}"; continue
+                    }
+                    "127.0.0.1" to relay.localPort
+                } else info.host to info.port
+                lateinit var client: LinkClient
+                client = LinkClient(
+                    host, port, info.fingerprint,
+                    onConnected = { c ->
+                        c.send(msg(MessageTypes.PAIR_REQUEST) {
+                            put("token", info.token)
+                            put("phoneName", store.displayName)
+                            put("model", Build.MODEL)
+                            put("androidVersion", Build.VERSION.RELEASE)
+                            put("phoneFingerprint", Identity.fingerprint)
+                        })
+                    },
+                    onMessage = MessageRouter(
+                        this@LinkService, store, pcId = null, out = { client.send(it) },
+                        onPaired = { name, id ->
+                            val pc = PairedPc(info.host, info.port, info.fingerprint, name, id.ifEmpty { info.fingerprint },
+                                relay = info.relay, relayHost = info.relayHost)
+                            store.add(pc)
+                            paired = pc
+                            LinkHub.setPairing(LinkState.Connected(name, viaInternet = route == ROUTE_INTERNET))
+                            client.close() // the normal connection takes over
+                        },
+                        onRejected = { reason ->
+                            rejected = true
+                            LinkHub.setPairing(LinkState.Error(reason))
+                            client.close()
+                        },
+                    )::handle,
+                )
+                try {
+                    client.run()
+                } catch (e: Exception) {
+                    if (paired == null && !rejected) lastError = if (route == ROUTE_INTERNET) "Internet: ${e.message}"
+                        else describe(e, info.pcName, info.host, info.port)
+                } finally {
+                    client.close()
+                    relay?.close()
+                }
+                if (paired != null || rejected) break
+            }
+            if (paired == null && !rejected) {
+                LinkHub.setPairing(LinkState.Error(lastError ?: "${info.pcName} closed the connection. Show a new code and try again."))
             }
             launch(Dispatchers.Main) { syncLoops(); stopIfIdle() }
         }
