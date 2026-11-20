@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Network test — Tethr Link</title>
+<style>
+  body { margin:0; background:#E8EEF8; color:#16213A; font:17px/1.55 system-ui, sans-serif; }
+  main { max-width:720px; margin:32px auto; background:#fff; border:1px solid #CDD7EA; border-radius:18px; padding:28px 32px; }
+  h1 { font-size:30px; margin:0 0 6px; }
+  p { margin:0 0 16px; color:#4A5675; }
+  button { font:inherit; background:#2557D6; color:#fff; border:0; border-radius:10px; padding:10px 18px; cursor:pointer; }
+  button:focus-visible { outline:3px solid #3D7BFF; outline-offset:3px; }
+  table { width:100%; border-collapse:collapse; margin-top:18px; }
+  td { padding:8px 4px; border-top:1px solid #E1E7F2; vertical-align:top; }
+  td:last-child { text-align:right; white-space:nowrap; font-weight:600; }
+  .ok { color:#1E7A4C; } .bad { color:#B42318; } .wait { color:#8A6A00; }
+  .verdict { margin-top:20px; padding:14px 16px; border-radius:12px; background:#F2F5FB; }
+  small { color:#4A5675; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Network test</h1>
+  <p>Checks whether this network lets Tethr Link through. Open it on the network you want to test (school Wi-Fi, work Wi-Fi), not your phone's hotspot.</p>
+  <button id="run">Run the test</button>
+  <table id="results" aria-live="polite"></table>
+  <div class="verdict" id="verdict" hidden></div>
+  <p style="margin-top:18px"><small>A filter that shows its own "blocked" page can look like "reachable" here. The relay's live connection is the one result that can't be faked.</small></p>
+</main>
+<script>
+const RELAY = "tethr-relay.shadowledgendog.workers.dev";
+const checks = [
+  ["Relay: live connection (the important one)", "ws"],
+  ["Relay: web address", `https://${RELAY}/`],
+  ["Account sign-in (Supabase)", "https://zljbvimcfrpeouscccvw.supabase.co/auth/v1/health"],
+  ["Updates (GitHub)", "https://api.github.com/"],
+  ["Tethr Link website (GitHub Pages)", "https://fatalquackers.github.io/tethr-link/"],
+  ["Google (baseline)", "https://www.google.com/generate_204"],
+  ["Microsoft (baseline)", "https://login.microsoftonline.com/"],
+  ["Cloudflare Pages", "https://pages.dev/"],
+  ["Vercel", "https://vercel.com/"],
+  ["Microsoft Dev Tunnels", "https://global.rel.tunnels.api.visualstudio.com/"],
+  ["Tailscale", "https://controlplane.tailscale.com/"],
+];
+
+function probe(url) {
+  return new Promise(resolve => {
+    const ctl = new AbortController();
+    const t0 = performance.now();
+    const timer = setTimeout(() => ctl.abort(), 8000);
+    fetch(url, { mode: "no-cors", cache: "no-store", signal: ctl.signal })
+      .then(() => resolve([true, `Reachable · ${Math.round(performance.now() - t0)} ms`]))
+      .catch(() => resolve([false, ctl.signal.aborted ? "Timed out" : "Blocked"]))
+      .finally(() => clearTimeout(timer));
+  });
+}
+
+function relaySocket() {
+  return new Promise(resolve => {
+    let done = false;
+    const finish = r => { if (!done) { done = true; resolve(r); } };
+    try {
+      const room = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, "0")).join("");
+      const ws = new WebSocket(`wss://${RELAY}/r/${room}?role=pc`);
+      const timer = setTimeout(() => { finish([false, "Timed out"]); try { ws.close(); } catch {} }, 9000);
+      ws.onopen = () => { clearTimeout(timer); ws.close(); finish([true, "Works"]); };
+      ws.onerror = () => { clearTimeout(timer); finish([false, "Blocked"]); };
+    } catch { finish([false, "Blocked"]); }
+  });
+}
+
+document.getElementById("run").addEventListener("click", async () => {
+  const table = document.getElementById("results");
+  const verdict = document.getElementById("verdict");
+  table.innerHTML = "";
+  verdict.hidden = true;
+  const cells = checks.map(([name]) => {
+    const row = table.insertRow();
+    row.insertCell().textContent = name;
+    const c = row.insertCell();
+    c.textContent = "Checking…";
+    c.className = "wait";
+    return c;
+  });
+  const results = await Promise.all(checks.map(([, url], i) =>
+    (url === "ws" ? relaySocket() : probe(url)).then(([ok, text]) => {
+      cells[i].textContent = (ok ? "✓ " : "✗ ") + text;
+      cells[i].className = ok ? "ok" : "bad";
+      return ok;
+    })));
+  verdict.hidden = false;
+  verdict.textContent = results[0]
+    ? "This network lets Tethr Link's internet connection through. If your phone still drops off here, it's the network cutting out, and Bluetooth backup covers that."
+    : "This network blocks Tethr Link's internet connection. Use Bluetooth backup here (phone: Set up Bluetooth backup), or tell the developer which lines failed.";
+});
+</script>
+</body>
+</html>
