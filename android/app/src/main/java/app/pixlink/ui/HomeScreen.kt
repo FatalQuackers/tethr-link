@@ -377,12 +377,14 @@ private fun PcCard(pc: PairedPc, state: LinkState?, onPair: () -> Unit) {
                     app.pixlink.link.LinkHub.lastDisconnectReason[pc.id]?.let {
                         Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    if (pc.bt != null && !app.pixlink.link.BluetoothTunnel.isPaired(ctx, pc.bt)) {
-                        TextButton(onClick = {
-                            if (!app.pixlink.link.BluetoothTunnel.pair(ctx, pc.bt))
-                                android.widget.Toast.makeText(ctx, "Turn on Bluetooth first", android.widget.Toast.LENGTH_SHORT).show()
-                        }, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) { Text("Pair over Bluetooth") }
-                    }
+                }
+                // Bluetooth is the backup when Wi-Fi drops out (school/work Wi-Fi): offer it even while connected.
+                if (pc.bt != null && !app.pixlink.link.BluetoothTunnel.isPaired(ctx, pc.bt)) {
+                    TextButton(onClick = {
+                        if (!app.pixlink.link.BluetoothTunnel.pair(ctx, pc.bt))
+                            android.widget.Toast.makeText(ctx, "Turn on Bluetooth first", android.widget.Toast.LENGTH_SHORT).show()
+                        else android.widget.Toast.makeText(ctx, "Accept the pairing prompt on your phone and on ${pc.name}", android.widget.Toast.LENGTH_LONG).show()
+                    }, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) { Text("Set up Bluetooth backup") }
                 }
             }
             if (state is LinkState.Error) {

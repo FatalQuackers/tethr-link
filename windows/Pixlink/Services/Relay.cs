@@ -34,8 +34,22 @@ public sealed class Relay
     /// <summary>Room name for a key: the relay never learns the key itself.</summary>
     public static string RoomFor(string key) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("tethr-relay:" + key))).ToLowerInvariant();
 
+    private CancellationTokenSource? _wait;
+
+    /// <summary>Network changed (new Wi-Fi, Wi-Fi back after a dropout): try the relay again now, not after the backoff.</summary>
+    public void Wake() { try { _wait?.Cancel(); } catch { } }
+
+    private async Task WaitAsync(TimeSpan delay, CancellationToken ct)
+    {
+        _wait = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        try { await Task.Delay(delay, _wait.Token); }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
+    }
+
     public async Task RunAsync(CancellationToken ct)
     {
+        System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += (_, _) => Wake();
+        System.Net.NetworkInformation.NetworkChange.NetworkAvailabilityChanged += (_, _) => Wake();
         var backoff = TimeSpan.FromSeconds(5);
         var logged = false;
         while (!ct.IsCancellationRequested)
@@ -66,8 +80,9 @@ public sealed class Relay
             {
                 if (logged) Log.Info($"Internet connections paused: {ex.GetBaseException().Message}");
                 logged = false;
-                try { await Task.Delay(backoff, ct); } catch { return; }
-                backoff = TimeSpan.FromSeconds(Math.Min(backoff.TotalSeconds * 2, 300));
+                try { await WaitAsync(backoff, ct); } catch { return; }
+                // School networks drop out often: keep retrying at least every minute.
+                backoff = TimeSpan.FromSeconds(Math.Min(backoff.TotalSeconds * 2, 60));
             }
             finally { ws.Dispose(); }
         }
