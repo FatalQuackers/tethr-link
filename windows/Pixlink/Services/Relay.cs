@@ -74,6 +74,8 @@ public sealed class Relay
                 Log.Info("Phone connecting over the internet");
                 await _link.AcceptAsync(stream, stream, "internet", ct);
                 pinger.Cancel();
+                if (ws.CloseStatus is { } cs && cs != WebSocketCloseStatus.NormalClosure)
+                    Log.Info($"The relay ended the session ({(int)cs} {ws.CloseStatusDescription})");
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
             catch (Exception ex)

@@ -23,8 +23,9 @@ export class Room extends DurableObject {
     if (request.headers.get("Upgrade") !== "websocket") return new Response("expected a WebSocket", { status: 426 });
 
     // A new connection replaces an old one with the same role (a dropped network leaves stale sockets).
+    // Its closing must not end the new session, so mark it first.
     for (const old of this.ctx.getWebSockets(role)) {
-      try { old.close(4000, "replaced"); } catch {}
+      try { old.serializeAttachment({ replaced: true }); old.close(4000, "replaced"); } catch {}
     }
 
     const [client, server] = Object.values(new WebSocketPair());
@@ -47,6 +48,7 @@ export class Room extends DurableObject {
   }
 
   webSocketClose(ws, code) {
+    try { ws.close(code === 1005 || code === 1006 ? 1000 : code, "closed"); } catch {}
     this.endSession(ws);
   }
 
@@ -56,6 +58,7 @@ export class Room extends DurableObject {
 
   // When either side leaves, the session is over: close the other side too.
   endSession(ws) {
+    if (ws.deserializeAttachment()?.replaced) return; // a stale socket, not the live session
     const other = this.ctx.getTags(ws)[0] === "pc" ? "phone" : "pc";
     for (const peer of this.ctx.getWebSockets(other)) {
       try { peer.close(4001, "other side left"); } catch {}

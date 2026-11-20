@@ -216,6 +216,7 @@ class LinkService : LifecycleService() {
                     }
                 } finally {
                     tunnel?.close()
+                    if (route == ROUTE_INTERNET && !connected && relay != null) supabaseFirst = relay !is SupabaseTunnel
                     relay?.close()
                 }
                 // A session that actually connected ended normally: start again from Wi-Fi.
@@ -251,13 +252,18 @@ class LinkService : LifecycleService() {
      * Connects once to a PC showing a pairing code. On success the PC is saved; this pairing
      * connection then closes and the PC's normal connection takes over a moment later.
      */
-    /** Internet route: Cloudflare first, then Supabase (some school networks block Cloudflare). */
-    private fun openInternet(host: String, key: String): Tunnel = try {
-        RelayTunnel.open(host, key)
-    } catch (e: Exception) {
-        try { SupabaseTunnel.open(key) } catch (e2: Exception) {
-            throw java.io.IOException(e2.message ?: e.message)
+    /** Which internet route to try first; flips when one gets through but then fails. */
+    @Volatile private var supabaseFirst = false
+
+    /** Internet route: Cloudflare and Supabase (some school networks block Cloudflare), the one that last worked first. */
+    private fun openInternet(host: String, key: String): Tunnel {
+        val order: List<() -> Tunnel> = listOf({ RelayTunnel.open(host, key) }, { SupabaseTunnel.open(key) })
+            .let { if (supabaseFirst) it.reversed() else it }
+        var last: Exception? = null
+        for (open in order) {
+            try { return open() } catch (e: Exception) { last = e }
         }
+        throw java.io.IOException(last?.message ?: "Couldn't reach the internet route")
     }
 
     private fun startPairing(info: PairingInfo) {
