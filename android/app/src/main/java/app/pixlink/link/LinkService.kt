@@ -171,7 +171,7 @@ class LinkService : LifecycleService() {
                 val bluetooth = route == ROUTE_BT
                 var connected = false
                 var tunnel: BluetoothTunnel? = null
-                var relay: RelayTunnel? = null
+                var relay: Tunnel? = null
                 lateinit var client: LinkClient
                 try {
                     val (host, port) = when (route) {
@@ -180,7 +180,7 @@ class LinkService : LifecycleService() {
                             "127.0.0.1" to tunnel.localPort
                         }
                         ROUTE_INTERNET -> {
-                            relay = RelayTunnel.open(pc.relayHost!!, pc.relay!!)
+                            relay = openInternet(pc.relayHost!!, pc.relay!!)
                             "127.0.0.1" to relay.localPort
                         }
                         else -> pc.host to pc.port
@@ -251,6 +251,15 @@ class LinkService : LifecycleService() {
      * Connects once to a PC showing a pairing code. On success the PC is saved; this pairing
      * connection then closes and the PC's normal connection takes over a moment later.
      */
+    /** Internet route: Cloudflare first, then Supabase (some school networks block Cloudflare). */
+    private fun openInternet(host: String, key: String): Tunnel = try {
+        RelayTunnel.open(host, key)
+    } catch (e: Exception) {
+        try { SupabaseTunnel.open(key) } catch (e2: Exception) {
+            throw java.io.IOException(e2.message ?: e.message)
+        }
+    }
+
     private fun startPairing(info: PairingInfo) {
         pairJob?.cancel()
         LinkHub.setPairing(LinkState.Connecting(info.pcName))
@@ -264,9 +273,9 @@ class LinkService : LifecycleService() {
                 if (info.relay != null && info.relayHost != null) add(ROUTE_INTERNET)
             }
             for (route in routes) {
-                var relay: RelayTunnel? = null
+                var relay: Tunnel? = null
                 val (host, port) = if (route == ROUTE_INTERNET) {
-                    relay = try { RelayTunnel.open(info.relayHost!!, info.relay!!) } catch (e: Exception) {
+                    relay = try { openInternet(info.relayHost!!, info.relay!!) } catch (e: Exception) {
                         lastError = "Internet: ${e.message}"; continue
                     }
                     "127.0.0.1" to relay.localPort

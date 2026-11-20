@@ -22,13 +22,13 @@ import kotlin.concurrent.thread
  * normal TLS client runs over it unchanged: the relay only ever sees encrypted bytes, and the PC's
  * certificate is checked exactly as on Wi-Fi.
  */
-class RelayTunnel private constructor(private val server: ServerSocket) {
-    val localPort: Int get() = server.localPort
+class RelayTunnel private constructor(private val server: ServerSocket) : Tunnel {
+    override val localPort: Int get() = server.localPort
     @Volatile private var local: Socket? = null
     @Volatile private var ws: WebSocket? = null
     private val pending = java.util.concurrent.LinkedBlockingQueue<ByteArray>()
 
-    fun close() {
+    override fun close() {
         runCatching { server.close() }
         runCatching { local?.close() }
         runCatching { ws?.close(1000, null) }

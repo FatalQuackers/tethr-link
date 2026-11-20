@@ -166,6 +166,8 @@ public partial class PhoneSession : ObservableObject
         if (_settings.AllowBluetooth) _ = _bluetooth.StartAsync(_cts.Token);
         if (_settings.RelayKey is null) { _settings.RelayKey = Relay.NewKey(); _settings.Save(); }
         _ = new Relay(server, () => IsPaired || PairingOpen ? _settings.RelayKey : null, () => _settings.AllowInternet).RunAsync(_cts.Token);
+        // Second internet route for networks that block Cloudflare (seen on school Wi-Fi).
+        _ = new SupabaseRelay(server, () => IsPaired || PairingOpen ? _settings.RelayKey : null, () => _settings.AllowInternet).RunAsync(_cts.Token);
         _ = Mirror.RunAsync(_cts.Token);
         _ = Beacon.RunAsync(BeaconPayload, _cts.Token);
         try { _ = Bonjour.StartAsync(_settings.PcId); } catch (Exception ex) { Log.Info($"Bonjour is off: {ex.Message}"); }
